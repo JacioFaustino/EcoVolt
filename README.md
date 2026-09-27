@@ -51,7 +51,7 @@ Fornecer à gestão do campus informações sobre o consumo de energia de cada a
 Execute no MySQL Workbench o script:
 
 ```
-database/ecovolt.sql
+(as migrations do Sequelize em `ecovolt-api/src/migrations`)
 ```
 
 ### 2. API
@@ -59,6 +59,9 @@ database/ecovolt.sql
 Inicie a API:
 
 ```bash
+cd ecovolt-api
+cp .env.example .env
+npm install
 npm run dev
 ```
 
@@ -66,7 +69,7 @@ A API ficará disponível em `http://localhost:3000`.
 
 ### 3. Front-end
 
-Abra a pasta `frontend` no VS Code e execute o arquivo `index.html` com o **Live Server**.
+Abra o front-end disponível no projeto com o **Live Server**, quando ele estiver configurado.
 
 ---
 
