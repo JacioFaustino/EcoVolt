@@ -105,7 +105,7 @@ A API ficará disponível em `http://localhost:3000`.
 
 ### 3. Front-end
 
-Abra o front-end disponível no projeto com o **Live Server**, quando ele estiver configurado.
+Abra o front-end disponível no projeto com a extensão **Live Server**, quando ele estiver configurado.
 
 ---
 
