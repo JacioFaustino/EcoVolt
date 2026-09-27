@@ -84,15 +84,16 @@ npm install
 npx sequelize-cli db:migrate
 ```
 
-Se quiser inserir os dados de exemplo, execute:
-
-```bash
-npx sequelize-cli db:seed:all
-```
 Para desfazer a última migration:
 
 ```bash
 npx sequelize-cli db:migrate:undo
+```
+
+Se quiser inserir os dados de exemplo, execute:
+
+```bash
+npx sequelize-cli db:seed:all
 ```
 
 Inicie a API:
