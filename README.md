@@ -77,14 +77,14 @@ DB_PASSWORD=sua_senha_aqui
 DB_NAME=ecovolt
 ```
 
-Instale as dependências e execute as migrations do Sequelize:
+Instale as dependências e crie as tabelas no SQL executando as migrations do Sequelize:
 ```Bash
 
 npm install
 npx sequelize-cli db:migrate
 ```
 
-Para desfazer a última migration:
+Para desfazer a última migration,portanto, apagando as tabelas criadas no SQL:
 
 ```bash
 npx sequelize-cli db:migrate:undo
