@@ -2,11 +2,15 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn('dispositivo', 'token_hash', {
-      type: Sequelize.STRING(64),
-      allowNull: true,
-      unique: true
-    });
+    await queryInterface.addColumn(
+      'dispositivo',
+      'token_hash',
+      {
+        type: Sequelize.STRING(64),
+        allowNull: true,
+        unique: true
+      }
+    );
 
     await queryInterface.addColumn(
       'dispositivo',

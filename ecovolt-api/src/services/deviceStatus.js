@@ -14,13 +14,29 @@ async function atualizarDispositivosOffline() {
       continue;
     }
 
-    const limiteEmMilissegundos =
-      dispositivo.intervalo_envio_segundos * 5 * 1000;
+    const intervalo = Number(
+      dispositivo.intervalo_envio_segundos
+    );
+
+    if (
+      !Number.isFinite(intervalo) ||
+      intervalo <= 0
+    ) {
+      continue;
+    }
+
+    const limite =
+      intervalo * 5 * 1000;
+
+    const ultimoContato =
+      new Date(
+        dispositivo.ultimo_contato
+      ).getTime();
 
     const tempoSemContato =
-      agora - new Date(dispositivo.ultimo_contato).getTime();
+      agora - ultimoContato;
 
-    if (tempoSemContato > limiteEmMilissegundos) {
+    if (tempoSemContato > limite) {
       await dispositivo.update({
         status_operacao: 'OFFLINE'
       });

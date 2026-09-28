@@ -2,7 +2,9 @@ const crypto = require('crypto');
 const db = require('../models');
 
 function gerarTokenDispositivo() {
-  return crypto.randomBytes(32).toString('hex');
+  return crypto
+    .randomBytes(32)
+    .toString('hex');
 }
 
 function gerarHashToken(token) {
@@ -12,41 +14,57 @@ function gerarHashToken(token) {
     .digest('hex');
 }
 
-async function autenticarDispositivo(req, res, next) {
+async function autenticarDispositivo(
+  req,
+  res,
+  next
+) {
   try {
-    const authorization = req.headers.authorization;
+    const authorization =
+      req.headers.authorization;
 
-    if (!authorization || !authorization.startsWith('Bearer ')) {
+    if (
+      !authorization ||
+      !authorization.startsWith('Bearer ')
+    ) {
       return res.status(401).json({
-        erro: 'Token do dispositivo não informado'
+        erro:
+          'Token do dispositivo não informado'
       });
     }
 
     const token = authorization
-      .replace('Bearer ', '')
+      .slice(7)
       .trim();
 
     if (!token) {
       return res.status(401).json({
-        erro: 'Token do dispositivo inválido'
+        erro:
+          'Token do dispositivo inválido'
       });
     }
 
-    const tokenHash = gerarHashToken(token);
+    const tokenHash =
+      gerarHashToken(token);
 
-    const dispositivo = await db.Dispositivo.findOne({
-      where: {
-        token_hash: tokenHash
-      }
-    });
+    const dispositivo =
+      await db.Dispositivo.findOne({
+        where: {
+          token_hash: tokenHash
+        }
+      });
 
     if (!dispositivo) {
       return res.status(401).json({
-        erro: 'Token do dispositivo inválido'
+        erro:
+          'Token do dispositivo inválido'
       });
     }
 
-    if (dispositivo.status_operacao === 'INATIVO') {
+    if (
+      dispositivo.status_operacao ===
+      'INATIVO'
+    ) {
       return res.status(403).json({
         erro: 'Dispositivo inativo'
       });
@@ -54,12 +72,16 @@ async function autenticarDispositivo(req, res, next) {
 
     req.dispositivo = dispositivo;
 
-    next();
+    return next();
   } catch (erro) {
-    console.error('Erro na autenticação do dispositivo:', erro);
+    console.error(
+      'Erro na autenticação do dispositivo:',
+      erro
+    );
 
-    res.status(500).json({
-      erro: 'Erro ao autenticar dispositivo'
+    return res.status(500).json({
+      erro:
+        'Erro ao autenticar dispositivo'
     });
   }
 }
