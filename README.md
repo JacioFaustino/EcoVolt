@@ -50,18 +50,55 @@ Fornecer à gestão do campus informações sobre o consumo de energia de cada a
 
 Execute no MySQL Workbench o script:
 
-```
-(as migrations do Sequelize em `ecovolt-api/src/migrations`)
+```sql
+CREATE DATABASE ecovolt
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
 ```
 
 ### 2. API
 
-Inicie a API:
+Configure a API seguindo os comandos na ordem:
 
 ```bash
 cd ecovolt-api
 cp .env.example .env
+```
+(No Windows, caso o comando acima não funcione, copie o arquivo .env.example manualmente e renomeie a cópia para .env.)
+
+Abra o arquivo .env e insira a senha root do MySQL no lugar do "sua_senha_aqui":
+
+```env
+
+PORT=3000
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=sua_senha_aqui
+DB_NAME=ecovolt
+```
+
+Instale as dependências e crie as tabelas no SQL executando as migrations do Sequelize:
+```Bash
+
 npm install
+npx sequelize-cli db:migrate
+```
+
+Para desfazer a última migration,portanto, apagando as tabelas criadas no SQL:
+
+```bash
+npx sequelize-cli db:migrate:undo
+```
+
+Se quiser inserir os dados de exemplo, execute:
+
+```bash
+npx sequelize-cli db:seed:all
+```
+
+Inicie a API:
+
+```bash
 npm run dev
 ```
 
@@ -69,7 +106,7 @@ A API ficará disponível em `http://localhost:3000`.
 
 ### 3. Front-end
 
-Abra o front-end disponível no projeto com o **Live Server**, quando ele estiver configurado.
+Abra o front-end disponível no projeto com a extensão **Live Server**, quando ele estiver configurado.
 
 ---
 
