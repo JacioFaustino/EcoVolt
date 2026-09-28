@@ -9,11 +9,14 @@ const rateLimit = require('express-rate-limit');
 const db = require('./src/models');
 
 const {
+  gerarTokenDispositivo,
+  gerarHashToken,
   autenticarDispositivo
 } = require('./src/middleware/deviceAuth');
 
 const {
-  autenticarUsuario
+  autenticarUsuario,
+  exigirPerfis
 } = require('./src/middleware/userAuth');
 
 const {
@@ -24,6 +27,14 @@ const {
   verificarLeitura
 } = require('./src/services/alertService');
 
+const {
+  leituraSchema
+} = require('./src/schemas/leituraSchema');
+
+const {
+  dispositivoSchema
+} = require('./src/schemas/dispositivoSchema');
+
 if (!process.env.JWT_SECRET) {
   console.warn(
     'JWT_SECRET não configurado.'
@@ -31,6 +42,7 @@ if (!process.env.JWT_SECRET) {
 }
 
 const app = express();
+
 const port =
   Number(process.env.PORT) || 3000;
 
@@ -44,6 +56,17 @@ const limiteLeituras = rateLimit({
   }
 });
 
+const limiteLogin = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    erro:
+      'Muitas tentativas de login. Tente novamente mais tarde.'
+  }
+});
+
 app.use(cors());
 
 app.use(
@@ -52,54 +75,12 @@ app.use(
   })
 );
 
-function numeroValido(valor) {
-  return (
-    valor !== undefined &&
-    valor !== null &&
-    valor !== '' &&
-    Number.isFinite(Number(valor))
-  );
-}
-
-function validarFaixasLeitura(dados) {
-  const faixas = [
-    ['corrente_rms_A', 0, 1000],
-    ['tensao_rms_V', 0, 1000],
-    ['potencia_ativa_W', 0, 100000],
-    ['fator_potencia', 0, 1],
-    ['energia_intervalo_kWh', 0, 1000],
-    ['energia_acumulada_kWh', 0, 100000000],
-    ['qualidade_sinal', 0, 100]
-  ];
-
-  for (const [
-    campo,
-    minimo,
-    maximo
-  ] of faixas) {
-    if (dados[campo] === undefined) {
-      continue;
-    }
-
-    if (
-      dados[campo] < minimo ||
-      dados[campo] > maximo
-    ) {
-      return (
-        `${campo} deve estar entre ` +
-        `${minimo} e ${maximo}`
-      );
-    }
-  }
-
-  return null;
-}
-
+//TESTE DA API
 app.get('/api/teste', async (req, res) => {
   try {
     await db.sequelize.authenticate();
 
-    res.json({
+    return res.json({
       mensagem:
         'Conectado ao banco via Sequelize!'
     });
@@ -109,24 +90,29 @@ app.get('/api/teste', async (req, res) => {
       erro
     );
 
-    res.status(503).json({
+    return res.status(503).json({
       erro: 'Banco de dados indisponível'
     });
   }
 });
 
+//AUTENTICAÇÃO DE USUÁRIOS
 app.post(
   '/api/auth/login',
+  limiteLogin,
   async (req, res) => {
     try {
       if (!process.env.JWT_SECRET) {
         return res.status(503).json({
-          erro: 'Autenticação não configurada'
+          erro:
+            'Autenticação não configurada'
         });
       }
 
-      const { email, senha } =
-        req.body || {};
+      const {
+        email,
+        senha
+      } = req.body || {};
 
       if (
         typeof email !== 'string' ||
@@ -142,7 +128,9 @@ app.post(
 
       const usuario =
         await db.Usuario.findOne({
-          where: { email }
+          where: {
+            email
+          }
         });
 
       if (!usuario) {
@@ -187,7 +175,8 @@ app.post(
       return res.json({
         token,
         usuario: {
-          id_usuario: usuario.id_usuario,
+          id_usuario:
+            usuario.id_usuario,
           nome: usuario.nome,
           email: usuario.email,
           perfil: usuario.perfil
@@ -207,6 +196,249 @@ app.post(
   }
 );
 
+//DISPOSITIVOS:
+
+//Lista os dispositivos
+app.get(
+  '/api/dispositivos',
+  autenticarUsuario,
+  exigirPerfis(
+    'ADMINISTRADOR',
+    'TECNICO'
+  ),
+  async (req, res) => {
+    try {
+      const dispositivos =
+        await db.Dispositivo.findAll({
+          attributes: {
+            exclude: [
+              'token_hash'
+            ]
+          },
+          order: [
+            ['id_dispositivo', 'ASC']
+          ]
+        });
+
+      return res.json(dispositivos);
+    } catch (erro) {
+      console.error(
+        'Erro ao listar dispositivos:',
+        erro
+      );
+
+      return res.status(500).json({
+        erro:
+          'Não foi possível listar os dispositivos'
+      });
+    }
+  }
+);
+
+//Cadastra um dispositivo e gera o token
+app.post(
+  '/api/dispositivos',
+  autenticarUsuario,
+  exigirPerfis('ADMINISTRADOR'),
+  async (req, res) => {
+    const resultado =
+      dispositivoSchema.safeParse(
+        req.body
+      );
+
+    if (!resultado.success) {
+      return res.status(400).json({
+        erro:
+          'Dados do dispositivo inválidos',
+        detalhes:
+          resultado.error.issues.map(
+            (item) => ({
+              campo:
+                item.path.join('.'),
+              mensagem:
+                item.message
+            })
+          )
+      });
+    }
+
+    try {
+      const token =
+        gerarTokenDispositivo();
+
+      const tokenHash =
+        gerarHashToken(token);
+
+      const dispositivo =
+        await db.Dispositivo.create({
+          ...resultado.data,
+          token_hash: tokenHash,
+          status_operacao: 'ONLINE'
+        });
+
+      return res.status(201).json({
+        dispositivo: {
+          id_dispositivo:
+            dispositivo.id_dispositivo,
+          id_sala:
+            dispositivo.id_sala,
+          identificador:
+            dispositivo.identificador,
+          mac_address:
+            dispositivo.mac_address,
+          modelo:
+            dispositivo.modelo,
+          intervalo_envio_segundos:
+            dispositivo.intervalo_envio_segundos,
+          status_operacao:
+            dispositivo.status_operacao
+        },
+        token
+      });
+    } catch (erro) {
+      if (
+        erro.name ===
+          'SequelizeUniqueConstraintError' ||
+        erro.name ===
+          'SequelizeForeignKeyConstraintError' ||
+        erro.name ===
+          'SequelizeValidationError'
+      ) {
+        return res.status(400).json({
+          erro:
+            'Dispositivo duplicado ou inválido'
+        });
+      }
+
+      console.error(
+        'Erro ao cadastrar dispositivo:',
+        erro
+      );
+
+      return res.status(500).json({
+        erro:
+          'Não foi possível cadastrar o dispositivo'
+      });
+    }
+  }
+);
+
+//Gera um novo token e invalida o anterior
+app.post(
+  '/api/dispositivos/:id/gerar-token',
+  autenticarUsuario,
+  exigirPerfis('ADMINISTRADOR'),
+  async (req, res) => {
+    const idDispositivo =
+      Number(req.params.id);
+
+    if (
+      !Number.isInteger(idDispositivo) ||
+      idDispositivo <= 0
+    ) {
+      return res.status(400).json({
+        erro:
+          'ID do dispositivo inválido'
+      });
+    }
+
+    try {
+      const dispositivo =
+        await db.Dispositivo.findByPk(
+          idDispositivo
+        );
+
+      if (!dispositivo) {
+        return res.status(404).json({
+          erro:
+            'Dispositivo não encontrado'
+        });
+      }
+
+      const token =
+        gerarTokenDispositivo();
+
+      await dispositivo.update({
+        token_hash:
+          gerarHashToken(token),
+        status_operacao: 'ONLINE'
+      });
+
+      return res.json({
+        mensagem:
+          'Novo token gerado. O token anterior foi invalidado.',
+        token
+      });
+    } catch (erro) {
+      console.error(
+        'Erro ao gerar token:',
+        erro
+      );
+
+      return res.status(500).json({
+        erro:
+          'Não foi possível gerar o token'
+      });
+    }
+  }
+);
+
+//Revoga o token de um dispositivo:
+app.post(
+  '/api/dispositivos/:id/revogar-token',
+  autenticarUsuario,
+  exigirPerfis('ADMINISTRADOR'),
+  async (req, res) => {
+    const idDispositivo =
+      Number(req.params.id);
+
+    if (
+      !Number.isInteger(idDispositivo) ||
+      idDispositivo <= 0
+    ) {
+      return res.status(400).json({
+        erro:
+          'ID do dispositivo inválido'
+      });
+    }
+
+    try {
+      const dispositivo =
+        await db.Dispositivo.findByPk(
+          idDispositivo
+        );
+
+      if (!dispositivo) {
+        return res.status(404).json({
+          erro:
+            'Dispositivo não encontrado'
+        });
+      }
+
+      await dispositivo.update({
+        token_hash: null,
+        status_operacao: 'INATIVO'
+      });
+
+      return res.json({
+        mensagem:
+          'Token revogado com sucesso'
+      });
+    } catch (erro) {
+      console.error(
+        'Erro ao revogar token:',
+        erro
+      );
+
+      return res.status(500).json({
+        erro:
+          'Não foi possível revogar o token'
+      });
+    }
+  }
+);
+
+//SALAS
 app.get(
   '/api/salas',
   autenticarUsuario,
@@ -228,28 +460,31 @@ app.get(
                d.id_dispositivo
            AND se.tipo = 'CORRENTE'
           LEFT JOIN leitura l
-            ON l.id_sensor = se.id_sensor
+            ON l.id_sensor =
+               se.id_sensor
           LEFT JOIN leitura l2
-            ON l2.id_sensor = l.id_sensor
+            ON l2.id_sensor =
+               l.id_sensor
            AND (
              l2.timestamp > l.timestamp
              OR (
-               l2.timestamp = l.timestamp
+               l2.timestamp =
+                 l.timestamp
                AND l2.id_leitura >
-                   l.id_leitura
+                 l.id_leitura
              )
            )
           WHERE l2.id_leitura IS NULL
         `);
 
-      res.json(linhas);
+      return res.json(linhas);
     } catch (erro) {
       console.error(
         'Erro ao listar salas:',
         erro
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         erro:
           'Não foi possível listar as salas'
       });
@@ -279,13 +514,15 @@ app.get(
       const [linhas] =
         await db.sequelize.query(`
           SELECT
-            HOUR(l.timestamp) AS hora,
+            HOUR(l.timestamp)
+              AS hora,
             SUM(
               l.energia_intervalo_kWh
             ) AS consumo_kWh
           FROM leitura l
           JOIN sensor se
-            ON se.id_sensor = l.id_sensor
+            ON se.id_sensor =
+               l.id_sensor
           JOIN dispositivo d
             ON d.id_dispositivo =
                se.id_dispositivo
@@ -296,14 +533,14 @@ app.get(
           replacements: [idSala]
         });
 
-      res.json(linhas);
+      return res.json(linhas);
     } catch (erro) {
       console.error(
         'Erro ao consultar consumo:',
         erro
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         erro:
           'Não foi possível consultar o consumo'
       });
@@ -311,6 +548,7 @@ app.get(
   }
 );
 
+//ALERTAS
 app.get(
   '/api/alertas',
   autenticarUsuario,
@@ -321,17 +559,19 @@ app.get(
           where: {
             status: 'ABERTO'
           },
-          include: [db.Sala]
+          include: [
+            db.Sala
+          ]
         });
 
-      res.json(alertas);
+      return res.json(alertas);
     } catch (erro) {
       console.error(
         'Erro ao listar alertas:',
         erro
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         erro:
           'Não foi possível listar os alertas'
       });
@@ -339,6 +579,7 @@ app.get(
   }
 );
 
+//LEITURAS DO ESP32
 app.post(
   '/api/leituras',
   limiteLeituras,
@@ -355,105 +596,41 @@ app.post(
       });
     }
 
-    const campos = [
-      'id_sensor',
-      'corrente_rms_A',
-      'tensao_rms_V',
-      'potencia_ativa_W',
-      'fator_potencia',
-      'energia_intervalo_kWh',
-      'energia_acumulada_kWh',
-      'timestamp',
-      'qualidade_sinal'
-    ];
-
-    const dados =
-      Object.fromEntries(
-        campos
-          .filter(
-            (campo) =>
-              req.body[campo] !== undefined
-          )
-          .map((campo) => [
-            campo,
-            req.body[campo]
-          ])
+    const resultado =
+      leituraSchema.safeParse(
+        req.body
       );
 
-    dados.id_sensor =
-      Number(dados.id_sensor);
-
-    if (
-      !Number.isInteger(dados.id_sensor) ||
-      dados.id_sensor <= 0
-    ) {
+    if (!resultado.success) {
       return res.status(400).json({
         erro:
-          'id_sensor deve ser um número ' +
-          'inteiro positivo'
+          'Dados da leitura inválidos',
+        detalhes:
+          resultado.error.issues.map(
+            (item) => ({
+              campo:
+                item.path.join('.'),
+              mensagem:
+                item.message
+            })
+          )
       });
     }
 
-    for (const campo of campos) {
-      if (
-        campo === 'id_sensor' ||
-        campo === 'timestamp'
-      ) {
-        continue;
-      }
-
-      if (dados[campo] !== undefined) {
-        if (!numeroValido(dados[campo])) {
-          return res.status(400).json({
-            erro:
-              `${campo} deve ser um número válido`
-          });
-        }
-
-        dados[campo] =
-          Number(dados[campo]);
-      }
-    }
-
-    const erroFaixa =
-      validarFaixasLeitura(dados);
-
-    if (erroFaixa) {
-      return res.status(400).json({
-        erro: erroFaixa
-      });
-    }
-
-    if (dados.timestamp !== undefined) {
-      const data =
-        new Date(dados.timestamp);
-
-      if (Number.isNaN(data.getTime())) {
-        return res.status(400).json({
-          erro: 'timestamp inválido'
-        });
-      }
-
-      const limiteFuturo =
-        Date.now() + 5 * 60 * 1000;
-
-      if (data.getTime() > limiteFuturo) {
-        return res.status(400).json({
-          erro:
-            'timestamp não pode estar no futuro'
-        });
-      }
-
-      dados.timestamp = data;
-    }
+    const {
+      estado_porta,
+      ...dados
+    } = resultado.data;
 
     try {
       const sensor =
         await db.Sensor.findOne({
           where: {
-            id_sensor: dados.id_sensor,
+            id_sensor:
+              dados.id_sensor,
             id_dispositivo:
-              req.dispositivo.id_dispositivo
+              req.dispositivo
+                .id_dispositivo
           }
         });
 
@@ -465,16 +642,37 @@ app.post(
       }
 
       const leitura =
-        await db.Leitura.create(dados);
+        await db.Leitura.create(
+          dados
+        );
 
-      await verificarLeitura(leitura);
+      if (
+        estado_porta !== undefined
+      ) {
+        await db.EstadoPorta.create({
+          id_sensor:
+            dados.id_sensor,
+          estado: estado_porta,
+          timestamp:
+            dados.timestamp ||
+            new Date()
+        });
+      }
+
+      await verificarLeitura(
+        leitura
+      );
 
       await req.dispositivo.update({
-        ultimo_contato: new Date(),
-        status_operacao: 'ONLINE'
+        ultimo_contato:
+          new Date(),
+        status_operacao:
+          'ONLINE'
       });
 
-      return res.status(201).json(leitura);
+      return res.status(201).json(
+        leitura
+      );
     } catch (erro) {
       if (
         erro.name ===
@@ -501,6 +699,7 @@ app.post(
   }
 );
 
+//TRATAMENTO DE JSON INVÁLIDO
 app.use((erro, req, res, next) => {
   if (
     erro instanceof SyntaxError &&
@@ -515,6 +714,7 @@ app.use((erro, req, res, next) => {
   next(erro);
 });
 
+//SERVIDOR
 app.listen(
   port,
   '0.0.0.0',

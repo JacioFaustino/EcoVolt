@@ -6,7 +6,7 @@ module.exports = {
     const senha = await bcrypt.hash('123456', 10);
     return qi.bulkInsert('usuario', [
       { nome: 'Administrador EcoVolt', email: 'admin@ecovolt.ifrn.edu.br',
-        senha_hash: senha, perfil: 'ADMIN', status: 'ATIVO' }
+        senha_hash: senha, perfil: 'ADMINISTRADOR', status: 'ATIVO' }
     ]);
   },
   down: (qi) => qi.bulkDelete('usuario', null, {})
