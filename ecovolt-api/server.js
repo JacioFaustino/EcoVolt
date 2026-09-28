@@ -2,7 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const db = require('./src/models');
-
+const { verificarLeitura } = require('./src/services/alertService');
+const { autenticarDispositivo } = require('./src/middleware/deviceAuth');
+const { atualizarDispositivosOffline } = require('./src/services/deviceStatus');
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 
@@ -78,7 +80,7 @@ app.get('/api/alertas', async (req, res) => {
   }
 });
 
-app.post('/api/leituras', async (req, res) => {
+app.post('/api/leituras', autenticarDispositivo, async (req, res) => {
   const campos = [
     'id_sensor', 'corrente_rms_A', 'tensao_rms_V', 'potencia_ativa_W',
     'fator_potencia', 'energia_intervalo_kWh', 'energia_acumulada_kWh',
@@ -93,13 +95,37 @@ app.post('/api/leituras', async (req, res) => {
     return res.status(400).json({ erro: 'id_sensor deve ser um número inteiro positivo' });
   }
   dados.id_sensor = Number(dados.id_sensor);
+  if (!Number.isInteger(dados.id_sensor) || dados.id_sensor <= 0) {
+    return res.status(400).json({
+        erro: 'id_sensor deve ser um número inteiro positivo'
+    });
+  }
 
-  try {
-    const leitura = await db.Leitura.create(dados);
-    res.status(201).json(leitura);
-  } catch (erro) {
-    if (erro.name === 'SequelizeForeignKeyConstraintError' || erro.name === 'SequelizeValidationError') {
-      return res.status(400).json({ erro: 'Dados da leitura inválidos' });
+    try {
+        const sensor = await db.Sensor.findOne({
+            where: {
+                id_sensor: dados.id_sensor,
+                id_dispositivo: req.dispositivo.id_dispositivo
+            }
+        });
+
+        if (!sensor) {
+            return res.status(403).json({
+                erro: 'O sensor não pertence a este dispositivo'
+            });
+        }
+
+        const leitura = await db.Leitura.create(dados);
+
+        await req.dispositivo.update({
+            ultimo_contato: new Date(),
+            status_operacao: 'ONLINE'
+        });
+
+        return res.status(201).json(leitura);
+    } catch (erro) {
+        if (erro.name === 'SequelizeForeignKeyConstraintError' || erro.name === 'SequelizeValidationError') {
+        return res.status(400).json({ erro: 'Dados da leitura inválidos' });
     }
     console.error('Erro ao criar leitura:', erro);
     res.status(500).json({ erro: 'Não foi possível registrar a leitura' });
@@ -115,6 +141,22 @@ app.use((erro, req, res, next) => {
 
 app.listen(port, '0.0.0.0', () => {
   console.log(`API rodando na porta ${port}`);
+
+  atualizarDispositivosOffline().catch((erro) => {
+    console.error(
+      'Erro ao verificar dispositivos offline:',
+      erro
+    );
+  });
+
+  setInterval(() => {
+    atualizarDispositivosOffline().catch((erro) => {
+      console.error(
+        'Erro ao verificar dispositivos offline:',
+        erro
+      );
+    });
+  }, 30000);
 });
 
 module.exports = app;

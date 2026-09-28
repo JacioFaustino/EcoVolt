@@ -7,7 +7,9 @@ module.exports = (sequelize, DataTypes) => {
     modelo: DataTypes.STRING(50),
     data_instalacao: DataTypes.DATEONLY,
     ultimo_contato: DataTypes.DATE,
-    status_operacao: DataTypes.STRING(20)
+    status_operacao: DataTypes.STRING(20),
+    token_hash: { type: DataTypes.STRING(64), allowNull: true, unique: true },
+    intervalo_envio_segundos: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 2 }
   }, { tableName: 'dispositivo', timestamps: false });
 
   Dispositivo.associate = (m) => {
