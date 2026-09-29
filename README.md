@@ -290,7 +290,7 @@ GET /api/salas/3/consumo-hora
 
 ---
 
-### Dispositivos
+### Dispositivos(entidade para cada ESP32)
 
 As rotas de dispositivos exigem autenticação de usuário.
 
