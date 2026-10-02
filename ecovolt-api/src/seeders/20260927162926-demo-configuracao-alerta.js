@@ -23,7 +23,7 @@ module.exports = {
         status: 'ATIVA',
         acao_automatica: 'NOTIFICAR_ADMINISTRADOR',
         acionar_buzzer: false,
-        tempo_persistencia_segundos: 30,
+        tempo_persistencia_segundos: 10,
         duracao_buzzer_segundos: 0
       },
       {
@@ -45,7 +45,7 @@ module.exports = {
         status: 'ATIVA',
         acao_automatica: 'NOTIFICAR_ADMINISTRADOR',
         acionar_buzzer: false,
-        tempo_persistencia_segundos: 30,
+        tempo_persistencia_segundos: 10,
         duracao_buzzer_segundos: 0
       }
     ]

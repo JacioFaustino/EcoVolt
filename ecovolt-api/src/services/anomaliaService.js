@@ -1,5 +1,9 @@
 const db = require('../models');
 
+const {
+  Op
+} = db.Sequelize;
+
 async function obterContextoLeitura(
   leitura
 ) {
@@ -77,13 +81,40 @@ async function obterAlertaAberto(
   });
 }
 
+async function obterAlertaEmAndamento(
+  idSala,
+  tipoAlerta
+) {
+  return db.Alerta.findOne({
+    where: {
+      id_sala: idSala,
+      tipo_alerta: tipoAlerta,
+      status: {
+        [Op.in]: [
+          'PENDENTE',
+          'ABERTO'
+        ]
+      }
+    },
+    order: [
+      ['timestamp_inicio', 'ASC']
+    ]
+  });
+}
+
 function segundosEntre(
   inicio,
   fim
 ) {
+  const dataInicio =
+    new Date(inicio);
+
+  const dataFim =
+    new Date(fim);
+
   return (
-    new Date(fim).getTime() -
-    new Date(inicio).getTime()
+    dataFim.getTime() -
+    dataInicio.getTime()
   ) / 1000;
 }
 
@@ -107,71 +138,119 @@ async function verificarR3A({
     Number.isFinite(limite) &&
     potencia > limite;
 
-  if (
-    !portaAberta ||
-    !potenciaAlta
-  ) {
-    const alerta =
-      await obterAlertaAberto(
-        contexto.id_sala,
-        'R3A_PORTA_ABERTA'
-      );
+  const condicaoAtiva =
+    portaAberta && potenciaAlta;
 
-    if (alerta) {
-      await alerta.update({
+  const instanteLeitura =
+    leitura.timestamp
+      ? new Date(leitura.timestamp)
+      : new Date();
+
+  if (
+    Number.isNaN(
+      instanteLeitura.getTime()
+    )
+  ) {
+    return null;
+  }
+
+  const alertaEmAndamento =
+    await obterAlertaEmAndamento(
+      contexto.id_sala,
+      'R3A_PORTA_ABERTA'
+    );
+
+  /*
+   * Se a porta fechou ou a potência
+   * caiu abaixo do limite, encerra
+   * qualquer alerta R3A em andamento.
+   */
+  if (!condicaoAtiva) {
+    if (alertaEmAndamento) {
+      await alertaEmAndamento.update({
         status: 'FECHADO',
         timestamp_fim:
-          new Date()
+          instanteLeitura
       });
     }
 
     return null;
   }
 
-  const inicio =
-    new Date(estadoPorta.timestamp);
-
-  const agora =
-    new Date(leitura.timestamp);
-
-  const tempoAberta =
-    segundosEntre(inicio, agora);
-
-  if (
-    tempoAberta <
-    configuracao.tempo_persistencia_segundos
-  ) {
-    return null;
+  /*
+   * A contagem começa somente agora:
+   * porta aberta + potência acima do limite.
+   */
+  if (!alertaEmAndamento) {
+    return db.Alerta.create({
+      id_sala: contexto.id_sala,
+      id_config:
+        configuracao.id_config,
+      id_leitura:
+        leitura.id_leitura,
+      tipo_alerta:
+        'R3A_PORTA_ABERTA',
+      descricao:
+        'Porta aberta com ar-condicionado ligado',
+      valor_detectado:
+        leitura.potencia_ativa_W,
+      timestamp_inicio:
+        instanteLeitura,
+      status: 'PENDENTE',
+      gravidade: 'MEDIA'
+    });
   }
 
-  let alerta =
-    await obterAlertaAberto(
-      contexto.id_sala,
-      'R3A_PORTA_ABERTA'
+  const tempoAtivo =
+    segundosEntre(
+      alertaEmAndamento.timestamp_inicio,
+      instanteLeitura
     );
 
-  if (!alerta) {
-    alerta =
-      await db.Alerta.create({
-        id_sala: contexto.id_sala,
-        id_config:
-          configuracao.id_config,
-        id_leitura:
-          leitura.id_leitura,
-        tipo_alerta:
-          'R3A_PORTA_ABERTA',
-        descricao:
-          'Porta aberta com ar-condicionado ligado',
-        valor_detectado:
-          leitura.potencia_ativa_W,
-        timestamp_inicio:
-          inicio,
-        status: 'ABERTO',
-        gravidade: 'MEDIA'
-      });
+  const tempoNecessario =
+    Number(
+      configuracao
+        .tempo_persistencia_segundos
+    );
+
+  /*
+   * A condição ainda não atingiu
+   * o tempo configurado.
+   */
+  if (
+    alertaEmAndamento.status ===
+      'PENDENTE' &&
+    tempoAtivo < tempoNecessario
+  ) {
+    await alertaEmAndamento.update({
+      id_leitura:
+        leitura.id_leitura,
+      valor_detectado:
+        leitura.potencia_ativa_W
+    });
+
+    return alertaEmAndamento;
   }
 
-  return alerta;
+  /*
+   * A condição permaneceu ativa pelo
+   * tempo necessário.
+   */
+  if (
+    alertaEmAndamento.status ===
+      'PENDENTE' &&
+    tempoAtivo >= tempoNecessario
+  ) {
+    await alertaEmAndamento.update({
+      status: 'ABERTO',
+      id_leitura:
+        leitura.id_leitura,
+      valor_detectado:
+        leitura.potencia_ativa_W
+    });
+  }
+
+  return alertaEmAndamento;
 }
 
 async function verificarR3B({
@@ -195,27 +274,48 @@ async function verificarR3B({
     Number.isFinite(limite) &&
     potencia > limite;
 
+  const condicaoAtiva =
+    portaAberta && potenciaAlta;
+
+  const instanteLeitura =
+    leitura.timestamp
+      ? new Date(leitura.timestamp)
+      : new Date();
+
   if (
-    !portaAberta ||
-    !potenciaAlta
+    Number.isNaN(
+      instanteLeitura.getTime()
+    )
   ) {
-    const alerta =
+    return null;
+  }
+
+  /*
+   * Se a condição terminou, encerra
+   * a R3B caso ela esteja aberta.
+   */
+  if (!condicaoAtiva) {
+    const alertaR3B =
       await obterAlertaAberto(
         contexto.id_sala,
         'R3B_PORTA_ABERTA_PERSISTENTE'
       );
 
-    if (alerta) {
-      await alerta.update({
+    if (alertaR3B) {
+      await alertaR3B.update({
         status: 'FECHADO',
         timestamp_fim:
-          new Date()
+          instanteLeitura
       });
     }
 
     return null;
   }
 
+  /*
+   * A R3B só pode começar depois
+   * que a R3A estiver ABERTA.
+   */
   const alertaR3A =
     await obterAlertaAberto(
       contexto.id_sala,
@@ -229,20 +329,32 @@ async function verificarR3B({
   const tempoDepoisR3A =
     segundosEntre(
       alertaR3A.timestamp_inicio,
-      leitura.timestamp
+      instanteLeitura
     );
 
-  const tempoNecessario =
+  const tempoR3A =
     Number(
       configuracaoR3A
         .tempo_persistencia_segundos
-    ) +
+    );
+
+  const tempoR3B =
     Number(
       configuracaoR3B
         .tempo_persistencia_segundos
     );
 
-  if (tempoDepoisR3A < tempoNecessario) {
+  const tempoNecessario =
+    tempoR3A + tempoR3B;
+
+  /*
+   * Aguarda o tempo adicional
+   * configurado para a R3B.
+   */
+  if (
+    tempoDepoisR3A <
+    tempoNecessario
+  ) {
     return null;
   }
 
@@ -269,13 +381,15 @@ async function verificarR3B({
     valor_detectado:
       leitura.potencia_ativa_W,
     timestamp_inicio:
-      new Date(alertaR3A.timestamp_inicio),
+      instanteLeitura,
     status: 'ABERTO',
     gravidade: 'ALTA'
   });
 }
 
-async function verificarLeitura(leitura) {
+async function verificarLeitura(
+  leitura
+) {
   const contexto =
     await obterContextoLeitura(
       leitura
