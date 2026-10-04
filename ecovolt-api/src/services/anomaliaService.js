@@ -26,7 +26,8 @@ async function obterContextoLeitura(
         d.id_sala,
         s.dias_funcionamento,
         s.horario_inicio,
-        s.horario_fim
+        s.horario_fim,
+        s.capacidade_max_W
       FROM leitura l
       JOIN sensor se
         ON se.id_sensor = l.id_sensor
@@ -284,6 +285,50 @@ async function verificarR2({
   });
 }
 
+async function verificarR4({
+  leitura,
+  contexto,
+  configuracao
+}) {
+  const instante =
+    obterInstanteLeitura(leitura);
+
+  if (!instante) {
+    return null;
+  }
+
+  const potencia =
+    Number(leitura.potencia_ativa_W);
+
+  const capacidade =
+    Number(contexto.capacidade_max_W);
+
+  const condicaoAtiva =
+    Number.isFinite(potencia) &&
+    Number.isFinite(capacidade) &&
+    potencia > capacidade;
+
+  return processarAlertaPersistente({
+    idSala: contexto.id_sala,
+    idConfig: configuracao.id_config,
+    idLeitura: leitura.id_leitura,
+    tipoAlerta:
+      'R4_SOBRECARGA',
+    descricao:
+      'Potência acima da capacidade máxima do circuito',
+    valorDetectado:
+      leitura.potencia_ativa_W,
+    gravidade: 'ALTA',
+    condicaoAtiva,
+    timestamp: instante,
+    tempoPersistencia:
+      Number(
+        configuracao
+          .tempo_persistencia_segundos
+      )
+  });
+}
+
 async function verificarR3A({
   leitura,
   contexto,
@@ -466,6 +511,21 @@ async function verificarLeitura(
     });
   }
 
+  const configuracaoR4 =
+    await obterConfiguracao(
+      contexto.id_sala,
+      'R4_SOBRECARGA'
+    );
+
+  if (configuracaoR4) {
+    await verificarR4({
+      leitura,
+      contexto,
+      configuracao:
+        configuracaoR4
+    });
+  }
+
   const configuracaoR2 =
     await obterConfiguracao(
       contexto.id_sala,
@@ -541,5 +601,6 @@ module.exports = {
   verificarR1,
   verificarR2,
   verificarR3A,
-  verificarR3B
+  verificarR3B,
+  verificarR4
 };

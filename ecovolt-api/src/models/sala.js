@@ -3,7 +3,7 @@ module.exports = (sequelize, DataTypes) => {
     id_sala: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     nome: { type: DataTypes.STRING(100), allowNull: false },
     localizacao: DataTypes.STRING(150),
-    capacidade_max: DataTypes.INTEGER,
+    capacidade_max_W: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
     area_m2: DataTypes.DECIMAL(6, 2),
     status: DataTypes.STRING(20),
     dias_funcionamento: DataTypes.STRING(50),
