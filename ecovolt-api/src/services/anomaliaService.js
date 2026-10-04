@@ -236,6 +236,54 @@ async function verificarR1({
   });
 }
 
+async function verificarR2({
+  leitura,
+  contexto,
+  configuracao
+}) {
+  const instante =
+    obterInstanteLeitura(leitura);
+
+  if (!instante) {
+    return null;
+  }
+
+  const potencia =
+    Number(leitura.potencia_ativa_W);
+
+  const limite =
+    Number(configuracao.valor_limite);
+
+  const condicaoAtiva =
+    Number.isFinite(potencia) &&
+    Number.isFinite(limite) &&
+    potencia > limite &&
+    horarioEstaForaDaSala(
+      instante,
+      contexto
+    );
+
+  return processarAlertaPersistente({
+    idSala: contexto.id_sala,
+    idConfig: configuracao.id_config,
+    idLeitura: leitura.id_leitura,
+    tipoAlerta:
+      'R2_AR_FORA_HORARIO',
+    descricao:
+      'Ar-condicionado ligado fora do horário de funcionamento',
+    valorDetectado:
+      leitura.potencia_ativa_W,
+    gravidade: 'MEDIA',
+    condicaoAtiva,
+    timestamp: instante,
+    tempoPersistencia:
+      Number(
+        configuracao
+          .tempo_persistencia_segundos
+      )
+  });
+}
+
 async function verificarR3A({
   leitura,
   contexto,
@@ -418,6 +466,22 @@ async function verificarLeitura(
     });
   }
 
+  const configuracaoR2 =
+    await obterConfiguracao(
+      contexto.id_sala,
+      'R2_AR_FORA_HORARIO'
+    );
+
+  if (configuracaoR2) {
+    await verificarR2({
+      leitura,
+      contexto,
+      configuracao:
+        configuracaoR2
+    });
+  }
+
+
   const sensorPorta =
     await obterSensorPorta(
       contexto.id_dispositivo
@@ -475,6 +539,7 @@ async function verificarLeitura(
 module.exports = {
   verificarLeitura,
   verificarR1,
+  verificarR2,
   verificarR3A,
   verificarR3B
 };
