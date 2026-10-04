@@ -1,8 +1,9 @@
 const db = require('../models');
 
 const {
-  Op
-} = db.Sequelize;
+  obterAlertaAberto,
+  processarAlertaPersistente
+} = require('./alertaPersistenciaService');
 
 const DIAS_SEMANA = [
   'DOM',
@@ -83,54 +84,23 @@ async function obterEstadoAtualPorta(
   });
 }
 
-async function obterAlertaAberto(
-  idSala,
-  tipoAlerta
+function obterInstanteLeitura(
+  leitura
 ) {
-  return db.Alerta.findOne({
-    where: {
-      id_sala: idSala,
-      tipo_alerta: tipoAlerta,
-      status: 'ABERTO'
-    }
-  });
-}
+  const instante =
+    leitura.timestamp
+      ? new Date(leitura.timestamp)
+      : new Date();
 
-async function obterAlertaEmAndamento(
-  idSala,
-  tipoAlerta
-) {
-  return db.Alerta.findOne({
-    where: {
-      id_sala: idSala,
-      tipo_alerta: tipoAlerta,
-      status: {
-        [Op.in]: [
-          'PENDENTE',
-          'ABERTO'
-        ]
-      }
-    },
-    order: [
-      ['timestamp_inicio', 'ASC']
-    ]
-  });
-}
+  if (
+    Number.isNaN(
+      instante.getTime()
+    )
+  ) {
+    return null;
+  }
 
-function segundosEntre(
-  inicio,
-  fim
-) {
-  const dataInicio =
-    new Date(inicio);
-
-  const dataFim =
-    new Date(fim);
-
-  return (
-    dataFim.getTime() -
-    dataInicio.getTime()
-  ) / 1000;
+  return instante;
 }
 
 function converterHoraParaSegundos(
@@ -182,10 +152,13 @@ function horarioEstaForaDaSala(
       .map((dia) => dia.trim().toUpperCase())
       .filter(Boolean);
 
-  const diaNaoPermitido =
+  if (
     !diasFuncionamento.includes(
       diaAtual
-    );
+    )
+  ) {
+    return true;
+  }
 
   const horaAtual =
     data.getHours() * 3600 +
@@ -203,7 +176,6 @@ function horarioEstaForaDaSala(
     );
 
   if (
-    diaNaoPermitido ||
     inicio === null ||
     fim === null
   ) {
@@ -221,16 +193,10 @@ async function verificarR1({
   contexto,
   configuracao
 }) {
-  const instanteLeitura =
-    leitura.timestamp
-      ? new Date(leitura.timestamp)
-      : new Date();
+  const instante =
+    obterInstanteLeitura(leitura);
 
-  if (
-    Number.isNaN(
-      instanteLeitura.getTime()
-    )
-  ) {
+  if (!instante) {
     return null;
   }
 
@@ -240,99 +206,34 @@ async function verificarR1({
   const limite =
     Number(configuracao.valor_limite);
 
-  const potenciaAlta =
+  const condicaoAtiva =
     Number.isFinite(potencia) &&
     Number.isFinite(limite) &&
-    potencia > limite;
-
-  const foraDoHorario =
+    potencia > limite &&
     horarioEstaForaDaSala(
-      instanteLeitura,
+      instante,
       contexto
     );
 
-  const condicaoAtiva =
-    potenciaAlta && foraDoHorario;
-
-  const alertaEmAndamento =
-    await obterAlertaEmAndamento(
-      contexto.id_sala,
-      'R1_CONSUMO_FORA_HORARIO'
-    );
-
-  if (!condicaoAtiva) {
-    if (alertaEmAndamento) {
-      await alertaEmAndamento.update({
-        status: 'FECHADO',
-        timestamp_fim:
-          instanteLeitura
-      });
-    }
-
-    return null;
-  }
-
-  if (!alertaEmAndamento) {
-    return db.Alerta.create({
-      id_sala: contexto.id_sala,
-      id_config:
-        configuracao.id_config,
-      id_leitura:
-        leitura.id_leitura,
-      tipo_alerta:
-        'R1_CONSUMO_FORA_HORARIO',
-      descricao:
-        'Consumo detectado fora do horário de funcionamento',
-      valor_detectado:
-        leitura.potencia_ativa_W,
-      timestamp_inicio:
-        instanteLeitura,
-      status: 'PENDENTE',
-      gravidade: 'MEDIA'
-    });
-  }
-
-  const tempoAtivo =
-    segundosEntre(
-      alertaEmAndamento.timestamp_inicio,
-      instanteLeitura
-    );
-
-  const tempoNecessario =
-    Number(
-      configuracao
-        .tempo_persistencia_segundos
-    );
-
-  if (
-    alertaEmAndamento.status ===
-      'PENDENTE' &&
-    tempoAtivo >= tempoNecessario
-  ) {
-    await alertaEmAndamento.update({
-      status: 'ABERTO',
-      id_leitura:
-        leitura.id_leitura,
-      valor_detectado:
-        leitura.potencia_ativa_W
-    });
-
-    return alertaEmAndamento;
-  }
-
-  if (
-    alertaEmAndamento.status ===
-      'PENDENTE'
-  ) {
-    await alertaEmAndamento.update({
-      id_leitura:
-        leitura.id_leitura,
-      valor_detectado:
-        leitura.potencia_ativa_W
-    });
-  }
-
-  return alertaEmAndamento;
+  return processarAlertaPersistente({
+    idSala: contexto.id_sala,
+    idConfig: configuracao.id_config,
+    idLeitura: leitura.id_leitura,
+    tipoAlerta:
+      'R1_CONSUMO_FORA_HORARIO',
+    descricao:
+      'Consumo detectado fora do horário de funcionamento',
+    valorDetectado:
+      leitura.potencia_ativa_W,
+    gravidade: 'MEDIA',
+    condicaoAtiva,
+    timestamp: instante,
+    tempoPersistencia:
+      Number(
+        configuracao
+          .tempo_persistencia_segundos
+      )
+  });
 }
 
 async function verificarR3A({
@@ -341,111 +242,44 @@ async function verificarR3A({
   estadoPorta,
   configuracao
 }) {
+  const instante =
+    obterInstanteLeitura(leitura);
+
+  if (!instante) {
+    return null;
+  }
+
   const potencia =
     Number(leitura.potencia_ativa_W);
 
   const limite =
     Number(configuracao.valor_limite);
 
-  const portaAberta =
-    estadoPorta.estado === 'ABERTA';
-
-  const potenciaAlta =
+  const condicaoAtiva =
+    estadoPorta.estado === 'ABERTA' &&
     Number.isFinite(potencia) &&
     Number.isFinite(limite) &&
     potencia > limite;
 
-  const condicaoAtiva =
-    portaAberta && potenciaAlta;
-
-  const instanteLeitura =
-    leitura.timestamp
-      ? new Date(leitura.timestamp)
-      : new Date();
-
-  if (
-    Number.isNaN(
-      instanteLeitura.getTime()
-    )
-  ) {
-    return null;
-  }
-
-  const alertaEmAndamento =
-    await obterAlertaEmAndamento(
-      contexto.id_sala,
-      'R3A_PORTA_ABERTA'
-    );
-
-  if (!condicaoAtiva) {
-    if (alertaEmAndamento) {
-      await alertaEmAndamento.update({
-        status: 'FECHADO',
-        timestamp_fim:
-          instanteLeitura
-      });
-    }
-
-    return null;
-  }
-
-  if (!alertaEmAndamento) {
-    return db.Alerta.create({
-      id_sala: contexto.id_sala,
-      id_config:
-        configuracao.id_config,
-      id_leitura:
-        leitura.id_leitura,
-      tipo_alerta:
-        'R3A_PORTA_ABERTA',
-      descricao:
-        'Porta aberta com ar-condicionado ligado',
-      valor_detectado:
-        leitura.potencia_ativa_W,
-      timestamp_inicio:
-        instanteLeitura,
-      status: 'PENDENTE',
-      gravidade: 'MEDIA'
-    });
-  }
-
-  const tempoAtivo =
-    segundosEntre(
-      alertaEmAndamento.timestamp_inicio,
-      instanteLeitura
-    );
-
-  const tempoNecessario =
-    Number(
-      configuracao
-        .tempo_persistencia_segundos
-    );
-
-  if (
-    alertaEmAndamento.status ===
-      'PENDENTE' &&
-    tempoAtivo >= tempoNecessario
-  ) {
-    await alertaEmAndamento.update({
-      status: 'ABERTO',
-      id_leitura:
-        leitura.id_leitura,
-      valor_detectado:
-        leitura.potencia_ativa_W
-    });
-  } else if (
-    alertaEmAndamento.status ===
-      'PENDENTE'
-  ) {
-    await alertaEmAndamento.update({
-      id_leitura:
-        leitura.id_leitura,
-      valor_detectado:
-        leitura.potencia_ativa_W
-    });
-  }
-
-  return alertaEmAndamento;
+  return processarAlertaPersistente({
+    idSala: contexto.id_sala,
+    idConfig: configuracao.id_config,
+    idLeitura: leitura.id_leitura,
+    tipoAlerta:
+      'R3A_PORTA_ABERTA',
+    descricao:
+      'Porta aberta com ar-condicionado ligado',
+    valorDetectado:
+      leitura.potencia_ativa_W,
+    gravidade: 'MEDIA',
+    condicaoAtiva,
+    timestamp: instante,
+    tempoPersistencia:
+      Number(
+        configuracao
+          .tempo_persistencia_segundos
+      )
+  });
 }
 
 async function verificarR3B({
@@ -455,8 +289,12 @@ async function verificarR3B({
   configuracaoR3A,
   configuracaoR3B
 }) {
-  const portaAberta =
-    estadoPorta.estado === 'ABERTA';
+  const instante =
+    obterInstanteLeitura(leitura);
+
+  if (!instante) {
+    return null;
+  }
 
   const potencia =
     Number(leitura.potencia_ativa_W);
@@ -464,39 +302,23 @@ async function verificarR3B({
   const limite =
     Number(configuracaoR3B.valor_limite);
 
-  const potenciaAlta =
+  const condicaoAtiva =
+    estadoPorta.estado === 'ABERTA' &&
     Number.isFinite(potencia) &&
     Number.isFinite(limite) &&
     potencia > limite;
 
-  const condicaoAtiva =
-    portaAberta && potenciaAlta;
-
-  const instanteLeitura =
-    leitura.timestamp
-      ? new Date(leitura.timestamp)
-      : new Date();
-
-  if (
-    Number.isNaN(
-      instanteLeitura.getTime()
-    )
-  ) {
-    return null;
-  }
-
   if (!condicaoAtiva) {
-    const alertaR3B =
+    const alerta =
       await obterAlertaAberto(
         contexto.id_sala,
         'R3B_PORTA_ABERTA_PERSISTENTE'
       );
 
-    if (alertaR3B) {
-      await alertaR3B.update({
+    if (alerta) {
+      await alerta.update({
         status: 'FECHADO',
-        timestamp_fim:
-          instanteLeitura
+        timestamp_fim: instante
       });
     }
 
@@ -513,42 +335,42 @@ async function verificarR3B({
     return null;
   }
 
-  const tempoDepoisR3A =
-    segundosEntre(
-      alertaR3A.timestamp_inicio,
-      instanteLeitura
+  const inicioR3A =
+    new Date(
+      alertaR3A.timestamp_inicio
     );
 
-  const tempoR3A =
+  const tempoDesdeR3A =
+    (
+      instante.getTime() -
+      inicioR3A.getTime()
+    ) / 1000;
+
+  const tempoNecessario =
     Number(
       configuracaoR3A
         .tempo_persistencia_segundos
-    );
-
-  const tempoR3B =
+    ) +
     Number(
       configuracaoR3B
         .tempo_persistencia_segundos
     );
 
-  const tempoNecessario =
-    tempoR3A + tempoR3B;
-
   if (
-    tempoDepoisR3A <
+    tempoDesdeR3A <
     tempoNecessario
   ) {
     return null;
   }
 
-  const alertaR3B =
+  const alertaExistente =
     await obterAlertaAberto(
       contexto.id_sala,
       'R3B_PORTA_ABERTA_PERSISTENTE'
     );
 
-  if (alertaR3B) {
-    return alertaR3B;
+  if (alertaExistente) {
+    return alertaExistente;
   }
 
   return db.Alerta.create({
@@ -563,8 +385,7 @@ async function verificarR3B({
       'Porta aberta com ar-condicionado ligado após o acionamento do buzzer',
     valor_detectado:
       leitura.potencia_ativa_W,
-    timestamp_inicio:
-      instanteLeitura,
+    timestamp_inicio: instante,
     status: 'ABERTO',
     gravidade: 'ALTA'
   });
