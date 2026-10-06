@@ -75,6 +75,45 @@ module.exports = {
         tempo_persistencia_segundos: 10,
         duracao_buzzer_segundos: 0
       },
+
+      {
+        id_sala: 1,
+        tipo_parametro: 'R6_LIMITE_DIARIO',
+        valor_limite: 25,
+        unidade_medida: 'kWh',
+        status: 'ATIVA',
+        acao_automatica:
+          'NOTIFICAR_ADMINISTRADOR',
+        acionar_buzzer: false,
+        tempo_persistencia_segundos: 0,
+        duracao_buzzer_segundos: 0
+      },
+
+      {
+        id_sala: 1,
+        tipo_parametro: 'R7_DISPOSITIVO_OFFLINE',
+        valor_limite: 5,
+        unidade_medida: 'INTERVALOS',
+        status: 'ATIVA',
+        acao_automatica:
+          'NOTIFICAR_ADMINISTRADOR_TECNICO',
+        acionar_buzzer: false,
+        tempo_persistencia_segundos: 0,
+        duracao_buzzer_segundos: 0
+      },
+
+      {
+        id_sala: 1,
+        tipo_parametro: 'R8_FALHA_LEITURA',
+        valor_limite: 50,
+        unidade_medida: '%',
+        status: 'ATIVA',
+        acao_automatica:
+          'NOTIFICAR_TECNICO',
+        acionar_buzzer: false,
+        tempo_persistencia_segundos: 600,
+        duracao_buzzer_segundos: 0
+      },
     
     ]
   ),

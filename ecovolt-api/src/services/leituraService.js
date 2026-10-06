@@ -1,8 +1,12 @@
 const db = require('../models');
 const AppError = require('../utils/AppError');
+
 const {
   verificarLeitura
 } = require('./anomaliaService');
+const {
+  fecharAlertaDispositivoOnline
+} = require('./deviceStatus');
 
 async function obterSensorPorta(
   idDispositivo
@@ -86,6 +90,8 @@ async function criarLeitura({
     ultimo_contato: new Date(),
     status_operacao: 'ONLINE'
   });
+  
+  await fecharAlertaDispositivoOnline(dispositivo);
 
   return leitura;
 }

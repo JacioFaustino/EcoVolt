@@ -21,7 +21,6 @@ async function obterContextoLeitura(
   const [linhas] =
     await db.sequelize.query(`
       SELECT
-        se.id_sensor,
         d.id_dispositivo,
         d.id_sala,
         s.dias_funcionamento,
@@ -32,8 +31,7 @@ async function obterContextoLeitura(
       JOIN sensor se
         ON se.id_sensor = l.id_sensor
       JOIN dispositivo d
-        ON d.id_dispositivo =
-           se.id_dispositivo
+        ON d.id_dispositivo = se.id_dispositivo
       JOIN sala s
         ON s.id_sala = d.id_sala
       WHERE l.id_leitura = ?
@@ -72,7 +70,7 @@ async function obterSensorPorta(
   });
 }
 
-async function obterEstadoAtualPorta(
+async function obterEstadoPorta(
   idSensor
 ) {
   return db.EstadoPorta.findOne({
@@ -88,40 +86,29 @@ async function obterEstadoAtualPorta(
 function obterInstanteLeitura(
   leitura
 ) {
-  const instante =
-    leitura.timestamp
-      ? new Date(leitura.timestamp)
-      : new Date();
+  const instante = leitura.timestamp
+    ? new Date(leitura.timestamp)
+    : new Date();
 
-  if (
-    Number.isNaN(
-      instante.getTime()
-    )
-  ) {
-    return null;
-  }
-
-  return instante;
+  return Number.isNaN(
+    instante.getTime()
+  )
+    ? null
+    : instante;
 }
 
-function converterHoraParaSegundos(
-  valor
-) {
+function horaEmSegundos(valor) {
   if (!valor) {
     return null;
   }
 
-  const partes =
-    String(valor).split(':');
-
-  const horas =
-    Number(partes[0]);
-
-  const minutos =
-    Number(partes[1]);
-
-  const segundos =
-    Number(partes[2] || 0);
+  const [
+    horas = 0,
+    minutos = 0,
+    segundos = 0
+  ] = String(valor)
+    .split(':')
+    .map(Number);
 
   if (
     !Number.isFinite(horas) ||
@@ -138,26 +125,24 @@ function converterHoraParaSegundos(
   );
 }
 
-function horarioEstaForaDaSala(
+function foraDoHorario(
   data,
   contexto
 ) {
   const diaAtual =
     DIAS_SEMANA[data.getDay()];
 
-  const diasFuncionamento =
+  const dias =
     String(
       contexto.dias_funcionamento || ''
     )
       .split(',')
-      .map((dia) => dia.trim().toUpperCase())
+      .map((dia) =>
+        dia.trim().toUpperCase()
+      )
       .filter(Boolean);
 
-  if (
-    !diasFuncionamento.includes(
-      diaAtual
-    )
-  ) {
+  if (!dias.includes(diaAtual)) {
     return true;
   }
 
@@ -167,25 +152,35 @@ function horarioEstaForaDaSala(
     data.getSeconds();
 
   const inicio =
-    converterHoraParaSegundos(
+    horaEmSegundos(
       contexto.horario_inicio
     );
 
   const fim =
-    converterHoraParaSegundos(
+    horaEmSegundos(
       contexto.horario_fim
     );
 
-  if (
-    inicio === null ||
-    fim === null
-  ) {
-    return true;
-  }
-
   return (
+    inicio === null ||
+    fim === null ||
     horaAtual < inicio ||
     horaAtual > fim
+  );
+}
+
+function acimaDoLimite(
+  valor,
+  limite
+) {
+  const numero = Number(valor);
+  const limiteNumerico =
+    Number(limite);
+
+  return (
+    Number.isFinite(numero) &&
+    Number.isFinite(limiteNumerico) &&
+    numero > limiteNumerico
   );
 }
 
@@ -201,17 +196,12 @@ async function verificarR1({
     return null;
   }
 
-  const potencia =
-    Number(leitura.potencia_ativa_W);
-
-  const limite =
-    Number(configuracao.valor_limite);
-
   const condicaoAtiva =
-    Number.isFinite(potencia) &&
-    Number.isFinite(limite) &&
-    potencia > limite &&
-    horarioEstaForaDaSala(
+    acimaDoLimite(
+      leitura.potencia_ativa_W,
+      configuracao.valor_limite
+    ) &&
+    foraDoHorario(
       instante,
       contexto
     );
@@ -229,11 +219,10 @@ async function verificarR1({
     gravidade: 'MEDIA',
     condicaoAtiva,
     timestamp: instante,
-    tempoPersistencia:
-      Number(
-        configuracao
-          .tempo_persistencia_segundos
-      )
+    tempoPersistencia: Number(
+      configuracao
+        .tempo_persistencia_segundos
+    )
   });
 }
 
@@ -249,17 +238,12 @@ async function verificarR2({
     return null;
   }
 
-  const potencia =
-    Number(leitura.potencia_ativa_W);
-
-  const limite =
-    Number(configuracao.valor_limite);
-
   const condicaoAtiva =
-    Number.isFinite(potencia) &&
-    Number.isFinite(limite) &&
-    potencia > limite &&
-    horarioEstaForaDaSala(
+    acimaDoLimite(
+      leitura.potencia_ativa_W,
+      configuracao.valor_limite
+    ) &&
+    foraDoHorario(
       instante,
       contexto
     );
@@ -277,55 +261,10 @@ async function verificarR2({
     gravidade: 'MEDIA',
     condicaoAtiva,
     timestamp: instante,
-    tempoPersistencia:
-      Number(
-        configuracao
-          .tempo_persistencia_segundos
-      )
-  });
-}
-
-async function verificarR4({
-  leitura,
-  contexto,
-  configuracao
-}) {
-  const instante =
-    obterInstanteLeitura(leitura);
-
-  if (!instante) {
-    return null;
-  }
-
-  const potencia =
-    Number(leitura.potencia_ativa_W);
-
-  const capacidade =
-    Number(contexto.capacidade_max_W);
-
-  const condicaoAtiva =
-    Number.isFinite(potencia) &&
-    Number.isFinite(capacidade) &&
-    potencia > capacidade;
-
-  return processarAlertaPersistente({
-    idSala: contexto.id_sala,
-    idConfig: configuracao.id_config,
-    idLeitura: leitura.id_leitura,
-    tipoAlerta:
-      'R4_SOBRECARGA',
-    descricao:
-      'Potência acima da capacidade máxima do circuito',
-    valorDetectado:
-      leitura.potencia_ativa_W,
-    gravidade: 'ALTA',
-    condicaoAtiva,
-    timestamp: instante,
-    tempoPersistencia:
-      Number(
-        configuracao
-          .tempo_persistencia_segundos
-      )
+    tempoPersistencia: Number(
+      configuracao
+        .tempo_persistencia_segundos
+    )
   });
 }
 
@@ -342,17 +281,12 @@ async function verificarR3A({
     return null;
   }
 
-  const potencia =
-    Number(leitura.potencia_ativa_W);
-
-  const limite =
-    Number(configuracao.valor_limite);
-
   const condicaoAtiva =
     estadoPorta.estado === 'ABERTA' &&
-    Number.isFinite(potencia) &&
-    Number.isFinite(limite) &&
-    potencia > limite;
+    acimaDoLimite(
+      leitura.potencia_ativa_W,
+      configuracao.valor_limite
+    );
 
   return processarAlertaPersistente({
     idSala: contexto.id_sala,
@@ -367,11 +301,10 @@ async function verificarR3A({
     gravidade: 'MEDIA',
     condicaoAtiva,
     timestamp: instante,
-    tempoPersistencia:
-      Number(
-        configuracao
-          .tempo_persistencia_segundos
-      )
+    tempoPersistencia: Number(
+      configuracao
+        .tempo_persistencia_segundos
+    )
   });
 }
 
@@ -389,17 +322,12 @@ async function verificarR3B({
     return null;
   }
 
-  const potencia =
-    Number(leitura.potencia_ativa_W);
-
-  const limite =
-    Number(configuracaoR3B.valor_limite);
-
   const condicaoAtiva =
     estadoPorta.estado === 'ABERTA' &&
-    Number.isFinite(potencia) &&
-    Number.isFinite(limite) &&
-    potencia > limite;
+    acimaDoLimite(
+      leitura.potencia_ativa_W,
+      configuracaoR3B.valor_limite
+    );
 
   if (!condicaoAtiva) {
     const alerta =
@@ -439,7 +367,7 @@ async function verificarR3B({
       inicioR3A.getTime()
     ) / 1000;
 
-  const tempoNecessario =
+  const tempoTotal =
     Number(
       configuracaoR3A
         .tempo_persistencia_segundos
@@ -449,10 +377,7 @@ async function verificarR3B({
         .tempo_persistencia_segundos
     );
 
-  if (
-    tempoDesdeR3A <
-    tempoNecessario
-  ) {
+  if (tempoDesdeR3A < tempoTotal) {
     return null;
   }
 
@@ -468,10 +393,8 @@ async function verificarR3B({
 
   return db.Alerta.create({
     id_sala: contexto.id_sala,
-    id_config:
-      configuracaoR3B.id_config,
-    id_leitura:
-      leitura.id_leitura,
+    id_config: configuracaoR3B.id_config,
+    id_leitura: leitura.id_leitura,
     tipo_alerta:
       'R3B_PORTA_ABERTA_PERSISTENTE',
     descricao:
@@ -481,6 +404,170 @@ async function verificarR3B({
     timestamp_inicio: instante,
     status: 'ABERTO',
     gravidade: 'ALTA'
+  });
+}
+
+async function verificarR4({
+  leitura,
+  contexto,
+  configuracao
+}) {
+  const instante =
+    obterInstanteLeitura(leitura);
+
+  if (!instante) {
+    return null;
+  }
+
+  const condicaoAtiva =
+    acimaDoLimite(
+      leitura.potencia_ativa_W,
+      contexto.capacidade_max_W
+    );
+
+  return processarAlertaPersistente({
+    idSala: contexto.id_sala,
+    idConfig: configuracao.id_config,
+    idLeitura: leitura.id_leitura,
+    tipoAlerta:
+      'R4_SOBRECARGA',
+    descricao:
+      'Potência acima da capacidade máxima do circuito',
+    valorDetectado:
+      leitura.potencia_ativa_W,
+    gravidade: 'ALTA',
+    condicaoAtiva,
+    timestamp: instante,
+    tempoPersistencia: Number(
+      configuracao
+        .tempo_persistencia_segundos
+    )
+  });
+}
+
+async function verificarR6({
+  leitura,
+  contexto,
+  configuracao
+}) {
+  const instante =
+    obterInstanteLeitura(leitura);
+
+  if (!instante) {
+    return null;
+  }
+
+  const inicioDia =
+    new Date(instante);
+
+  inicioDia.setHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+  const fimDia =
+    new Date(inicioDia);
+
+  fimDia.setDate(
+    fimDia.getDate() + 1
+  );
+
+  const [resultado] =
+    await db.sequelize.query(`
+      SELECT COALESCE(
+        SUM(l.energia_intervalo_kWh),
+        0
+      ) AS consumo_total
+      FROM leitura l
+      JOIN sensor se
+        ON se.id_sensor = l.id_sensor
+      JOIN dispositivo d
+        ON d.id_dispositivo =
+           se.id_dispositivo
+      WHERE d.id_sala = ?
+        AND l.timestamp >= ?
+        AND l.timestamp < ?
+    `, {
+      replacements: [
+        contexto.id_sala,
+        inicioDia,
+        fimDia
+      ]
+    });
+
+  const consumo =
+    Number(
+      resultado[0].consumo_total
+    );
+
+  const condicaoAtiva =
+    acimaDoLimite(
+      consumo,
+      configuracao.valor_limite
+    );
+
+  return processarAlertaPersistente({
+    idSala: contexto.id_sala,
+    idConfig: configuracao.id_config,
+    idLeitura: leitura.id_leitura,
+    tipoAlerta:
+      'R6_LIMITE_DIARIO',
+    descricao:
+      'Limite diário de consumo excedido',
+    valorDetectado: consumo,
+    gravidade: 'BAIXA',
+    condicaoAtiva,
+    timestamp: instante,
+    tempoPersistencia: 0
+  });
+}
+
+async function verificarR8({
+  leitura,
+  contexto,
+  configuracao
+}) {
+  const instante =
+    obterInstanteLeitura(leitura);
+
+  if (!instante) {
+    return null;
+  }
+
+  const corrente =
+    Number(leitura.corrente_rms_A);
+
+  const qualidade =
+    Number(leitura.qualidade_sinal);
+
+  const condicaoAtiva =
+    !Number.isFinite(corrente) ||
+    corrente < 0 ||
+    !Number.isFinite(qualidade) ||
+    qualidade <
+      Number(configuracao.valor_limite);
+
+  return processarAlertaPersistente({
+    idSala: contexto.id_sala,
+    idConfig: configuracao.id_config,
+    idLeitura: leitura.id_leitura,
+    tipoAlerta:
+      'R8_FALHA_LEITURA',
+    descricao:
+      'Falha ou inconsistência na leitura do sensor',
+    valorDetectado:
+      Number.isFinite(qualidade)
+        ? qualidade
+        : 0,
+    gravidade: 'MEDIA',
+    condicaoAtiva,
+    timestamp: instante,
+    tempoPersistencia: Number(
+      configuracao
+        .tempo_persistencia_segundos
+    )
   });
 }
 
@@ -496,51 +583,47 @@ async function verificarLeitura(
     return leitura;
   }
 
-  const configuracaoR1 =
-    await obterConfiguracao(
-      contexto.id_sala,
-      'R1_CONSUMO_FORA_HORARIO'
-    );
+  const regras = [
+    [
+      'R1_CONSUMO_FORA_HORARIO',
+      verificarR1
+    ],
+    [
+      'R2_AR_FORA_HORARIO',
+      verificarR2
+    ],
+    [
+      'R4_SOBRECARGA',
+      verificarR4
+    ],
+    [
+      'R6_LIMITE_DIARIO',
+      verificarR6
+    ],
+    [
+      'R8_FALHA_LEITURA',
+      verificarR8
+    ]
+  ];
 
-  if (configuracaoR1) {
-    await verificarR1({
-      leitura,
-      contexto,
-      configuracao:
-        configuracaoR1
-    });
+  for (const [
+    tipoParametro,
+    verificar
+  ] of regras) {
+    const configuracao =
+      await obterConfiguracao(
+        contexto.id_sala,
+        tipoParametro
+      );
+
+    if (configuracao) {
+      await verificar({
+        leitura,
+        contexto,
+        configuracao
+      });
+    }
   }
-
-  const configuracaoR4 =
-    await obterConfiguracao(
-      contexto.id_sala,
-      'R4_SOBRECARGA'
-    );
-
-  if (configuracaoR4) {
-    await verificarR4({
-      leitura,
-      contexto,
-      configuracao:
-        configuracaoR4
-    });
-  }
-
-  const configuracaoR2 =
-    await obterConfiguracao(
-      contexto.id_sala,
-      'R2_AR_FORA_HORARIO'
-    );
-
-  if (configuracaoR2) {
-    await verificarR2({
-      leitura,
-      contexto,
-      configuracao:
-        configuracaoR2
-    });
-  }
-
 
   const sensorPorta =
     await obterSensorPorta(
@@ -552,7 +635,7 @@ async function verificarLeitura(
   }
 
   const estadoPorta =
-    await obterEstadoAtualPorta(
+    await obterEstadoPorta(
       sensorPorta.id_sensor
     );
 
@@ -602,5 +685,7 @@ module.exports = {
   verificarR2,
   verificarR3A,
   verificarR3B,
-  verificarR4
+  verificarR4,
+  verificarR6,
+  verificarR8
 };
