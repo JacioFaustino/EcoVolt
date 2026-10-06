@@ -12,6 +12,7 @@ const alertaRoutes = require('./src/routes/alertaRoutes');
 const {atualizarDispositivosOffline} = require('./src/services/deviceStatus');
 const app = express();
 const port = Number(process.env.PORT) || 3000;
+const configuracaoAlertaRoutes = require('./src/routes/configuracaoAlertaRoutes');
 
 if (!process.env.JWT_SECRET) {
   console.warn(
@@ -27,6 +28,8 @@ app.use('/api/auth',authRoutes);
 app.use('/api/dispositivos',dispositivoRoutes);
 app.use('/api/salas',salaRoutes);
 app.use('/api/alertas',alertaRoutes);
+app.use('/api/configuracoes-alertas',configuracaoAlertaRoutes);
+
 
 //TESTE DA API
 app.get('/api/teste', async (req, res) => {
@@ -78,6 +81,7 @@ app.use((erro, req, res, next) => {
     erro: 'Erro interno do servidor'
   });
 });
+
 
 //SERVIDOR
 app.listen(

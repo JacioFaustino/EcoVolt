@@ -96,6 +96,137 @@ async function criarLeitura({
   return leitura;
 }
 
+async function listarLeituras({
+  idSensor,
+  idSala,
+  dataInicio,
+  dataFim,
+  limite = 100,
+  offset = 0
+}) {
+  const filtros = [];
+  const replacements = {};
+
+  if (idSensor) {
+    filtros.push('l.id_sensor = :idSensor');
+    replacements.idSensor = idSensor;
+  }
+
+  if (idSala) {
+    filtros.push('d.id_sala = :idSala');
+    replacements.idSala = idSala;
+  }
+
+  if (dataInicio) {
+    filtros.push('l.timestamp >= :dataInicio');
+    replacements.dataInicio = dataInicio;
+  }
+
+  if (dataFim) {
+    filtros.push('l.timestamp <= :dataFim');
+    replacements.dataFim = dataFim;
+  }
+
+  const where = filtros.length > 0
+    ? `WHERE ${filtros.join(' AND ')}`
+    : '';
+
+  replacements.limite = limite;
+  replacements.offset = offset;
+
+  const [dados] =
+    await db.sequelize.query(`
+      SELECT
+        l.id_leitura,
+        l.id_sensor,
+        se.id_dispositivo,
+        d.id_sala,
+        l.corrente_rms_A,
+        l.tensao_rms_V,
+        l.potencia_ativa_W,
+        l.fator_potencia,
+        l.energia_intervalo_kWh,
+        l.energia_acumulada_kWh,
+        l.qualidade_sinal,
+        l.timestamp
+      FROM leitura l
+      JOIN sensor se
+        ON se.id_sensor = l.id_sensor
+      JOIN dispositivo d
+        ON d.id_dispositivo =
+           se.id_dispositivo
+      ${where}
+      ORDER BY l.timestamp DESC
+      LIMIT :limite
+      OFFSET :offset
+    `, {
+      replacements
+    });
+
+  const [resultadoTotal] =
+    await db.sequelize.query(`
+      SELECT COUNT(*) AS total
+      FROM leitura l
+      JOIN sensor se
+        ON se.id_sensor = l.id_sensor
+      JOIN dispositivo d
+        ON d.id_dispositivo =
+           se.id_dispositivo
+      ${where}
+    `, {
+      replacements
+    });
+
+  return {
+    dados,
+    total: Number(resultadoTotal[0].total),
+    limite,
+    offset
+  };
+}
+
+async function obterLeituraPorId(
+  idLeitura
+) {
+  const [linhas] =
+    await db.sequelize.query(`
+      SELECT
+        l.id_leitura,
+        l.id_sensor,
+        se.id_dispositivo,
+        d.id_sala,
+        l.corrente_rms_A,
+        l.tensao_rms_V,
+        l.potencia_ativa_W,
+        l.fator_potencia,
+        l.energia_intervalo_kWh,
+        l.energia_acumulada_kWh,
+        l.qualidade_sinal,
+        l.timestamp
+      FROM leitura l
+      JOIN sensor se
+        ON se.id_sensor = l.id_sensor
+      JOIN dispositivo d
+        ON d.id_dispositivo =
+           se.id_dispositivo
+      WHERE l.id_leitura = ?
+      LIMIT 1
+    `, {
+      replacements: [idLeitura]
+    });
+
+  if (!linhas[0]) {
+    throw new AppError(
+      'Leitura não encontrada',
+      404
+    );
+  }
+
+  return linhas[0];
+}
+
 module.exports = {
-  criarLeitura
+  criarLeitura,
+  listarLeituras,
+  obterLeituraPorId
 };

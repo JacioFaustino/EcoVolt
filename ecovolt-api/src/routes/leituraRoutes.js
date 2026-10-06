@@ -7,6 +7,10 @@ const {
   autenticarDispositivo
 } = require('../middleware/deviceAuth');
 
+const {
+  autenticarUsuario
+} = require('../middleware/userAuth');
+
 const leituraController =
   require('../controllers/leituraController');
 
@@ -28,6 +32,18 @@ router.post(
   limiteLeituras,
   autenticarDispositivo,
   asyncHandler(leituraController.criar)
+);
+
+router.get(
+  '/',
+  autenticarUsuario,
+  asyncHandler(leituraController.listar)
+);
+
+router.get(
+  '/:id',
+  autenticarUsuario,
+  asyncHandler(leituraController.obterPorId)
 );
 
 module.exports = router;
