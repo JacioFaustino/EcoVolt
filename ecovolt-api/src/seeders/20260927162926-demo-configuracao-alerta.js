@@ -15,7 +15,7 @@ module.exports = {
         acao_automatica:
           'NOTIFICAR_ADMINISTRADOR',
         acionar_buzzer: false,
-        tempo_persistencia_segundos: 10,
+        tempo_persistencia_segundos: 600,
         duracao_buzzer_segundos: 0
       },
 
@@ -28,7 +28,7 @@ module.exports = {
         status: 'ATIVA',
         acao_automatica: 'NOTIFICAR_ADMINISTRADOR_TECNICO',
         acionar_buzzer: false,
-        tempo_persistencia_segundos: 10,
+        tempo_persistencia_segundos: 600,
         duracao_buzzer_segundos: 0
       },
 
@@ -43,8 +43,8 @@ module.exports = {
         acao_automatica:
           'ACIONAR_BUZZER',
         acionar_buzzer: true,
-        tempo_persistencia_segundos: 10,
-        duracao_buzzer_segundos: 10
+        tempo_persistencia_segundos: 300,
+        duracao_buzzer_segundos: 300
       },
 
   
@@ -58,7 +58,7 @@ module.exports = {
         acao_automatica:
           'NOTIFICAR_ADMINISTRADOR',
         acionar_buzzer: false,
-        tempo_persistencia_segundos: 10,
+        tempo_persistencia_segundos: 300,
         duracao_buzzer_segundos: 0
       },
 
@@ -72,7 +72,22 @@ module.exports = {
         acao_automatica:
           'NOTIFICAR_ADMINISTRADOR_TECNICO',
         acionar_buzzer: false,
-        tempo_persistencia_segundos: 10,
+        tempo_persistencia_segundos: 600,
+        duracao_buzzer_segundos: 0
+      },
+
+      {
+        id_sala: 1,
+        tipo_parametro:
+          'R5_PADRAO_HISTORICO',
+        valor_limite: 2,
+        unidade_medida:
+          'DESVIOS_PADRAO',
+        status: 'ATIVA',
+        acao_automatica:
+          'NOTIFICAR_ADMINISTRADOR',
+        acionar_buzzer: false,
+        tempo_persistencia_segundos: 0,
         duracao_buzzer_segundos: 0
       },
 

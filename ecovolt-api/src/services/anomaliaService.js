@@ -571,6 +571,158 @@ async function verificarR8({
   });
 }
 
+async function verificarR5({
+  leitura,
+  contexto,
+  configuracao
+}) {
+  const instante =
+    obterInstanteLeitura(leitura);
+
+  if (!instante) {
+    return null;
+  }
+
+  const inicioHora =
+    new Date(instante);
+
+  inicioHora.setMinutes(
+    0,
+    0,
+    0
+  );
+
+  const fimHora =
+    new Date(inicioHora);
+
+  fimHora.setHours(
+    fimHora.getHours() + 1
+  );
+
+  const quatroSemanasAntes =
+    new Date(inicioHora);
+
+  quatroSemanasAntes.setDate(
+    quatroSemanasAntes.getDate() - 28
+  );
+
+  const [resultado] =
+    await db.sequelize.query(`
+      SELECT
+        AVG(consumo_hora) AS media_historica,
+        STDDEV_POP(consumo_hora)
+          AS desvio_historico
+      FROM (
+        SELECT
+          DATE_FORMAT(
+            l.timestamp,
+            '%Y-%m-%d %H:00:00'
+          ) AS hora_referencia,
+          SUM(
+            l.energia_intervalo_kWh
+          ) AS consumo_hora
+        FROM leitura l
+        JOIN sensor se
+          ON se.id_sensor = l.id_sensor
+        JOIN dispositivo d
+          ON d.id_dispositivo =
+             se.id_dispositivo
+        WHERE d.id_sala = ?
+          AND l.timestamp >= ?
+          AND l.timestamp < ?
+          AND DAYOFWEEK(l.timestamp) =
+              DAYOFWEEK(?)
+          AND HOUR(l.timestamp) =
+              HOUR(?)
+        GROUP BY
+          DATE_FORMAT(
+            l.timestamp,
+            '%Y-%m-%d %H:00:00'
+          )
+      ) AS historico
+    `, {
+      replacements: [
+        contexto.id_sala,
+        quatroSemanasAntes,
+        inicioHora,
+        inicioHora,
+        inicioHora
+      ]
+    });
+
+  const media =
+    Number(
+      resultado[0].media_historica
+    );
+
+  const desvio =
+    Number(
+      resultado[0].desvio_historico
+    );
+
+const [consumoAtualResultado] =
+  await db.sequelize.query(`
+    SELECT
+      COALESCE(
+        SUM(l.energia_intervalo_kWh),
+        0
+      ) AS consumo_atual
+    FROM leitura l
+    JOIN sensor se
+      ON se.id_sensor = l.id_sensor
+    JOIN dispositivo d
+      ON d.id_dispositivo =
+         se.id_dispositivo
+    WHERE d.id_sala = ?
+      AND l.timestamp >= ?
+      AND l.timestamp < ?
+  `, {
+    replacements: [
+      contexto.id_sala,
+      inicioHora,
+      fimHora
+    ]
+  });
+
+const consumoAtual =
+  Number(
+    consumoAtualResultado[0]
+      .consumo_atual
+  );
+
+  if (
+    !Number.isFinite(media) ||
+    !Number.isFinite(desvio) ||
+    !Number.isFinite(consumoAtual)
+  ) {
+    return null;
+  }
+
+  const numeroDesvios =
+    Number(configuracao.valor_limite);
+
+  const limite =
+    media + numeroDesvios * desvio;
+
+  const condicaoAtiva =
+    consumoAtual > limite;
+
+  return processarAlertaPersistente({
+    idSala: contexto.id_sala,
+    idConfig: configuracao.id_config,
+    idLeitura: leitura.id_leitura,
+    tipoAlerta:
+      'R5_PADRAO_HISTORICO',
+    descricao:
+      'Consumo acima do padrão histórico',
+    valorDetectado: consumoAtual,
+    gravidade: 'BAIXA',
+    condicaoAtiva,
+    timestamp: instante,
+    tempoPersistencia: 0
+  });
+}
+
 async function verificarLeitura(
   leitura
 ) {
@@ -595,6 +747,10 @@ async function verificarLeitura(
     [
       'R4_SOBRECARGA',
       verificarR4
+    ],
+    [
+      'R5_PADRAO_HISTORICO',
+      verificarR5
     ],
     [
       'R6_LIMITE_DIARIO',
@@ -686,6 +842,7 @@ module.exports = {
   verificarR3A,
   verificarR3B,
   verificarR4,
+  verificarR5,
   verificarR6,
   verificarR8
 };

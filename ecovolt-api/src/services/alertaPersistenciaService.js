@@ -83,8 +83,9 @@ async function processarAlertaPersistente({
     return null;
   }
 
-  if (!alertaEmAndamento) {
-    return db.Alerta.create({
+if (!alertaEmAndamento) {
+  const alerta =
+    await db.Alerta.create({
       id_sala: idSala,
       id_config: idConfig,
       id_leitura: idLeitura,
@@ -92,10 +93,15 @@ async function processarAlertaPersistente({
       descricao,
       valor_detectado: valorDetectado,
       timestamp_inicio: timestamp,
-      status: 'PENDENTE',
+      status:
+        Number(tempoPersistencia) <= 0
+          ? 'ABERTO'
+          : 'PENDENTE',
       gravidade
     });
-  }
+
+  return alerta;
+}
 
   const tempoAtivo =
     segundosEntre(
