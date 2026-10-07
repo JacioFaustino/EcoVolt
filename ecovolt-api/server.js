@@ -13,6 +13,10 @@ const {atualizarDispositivosOffline} = require('./src/services/deviceStatus');
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 const configuracaoAlertaRoutes = require('./src/routes/configuracaoAlertaRoutes');
+const relatorioRoutes = require('./src/routes/relatorioRoutes');
+
+
+
 
 if (!process.env.JWT_SECRET) {
   console.warn(
@@ -29,7 +33,7 @@ app.use('/api/dispositivos',dispositivoRoutes);
 app.use('/api/salas',salaRoutes);
 app.use('/api/alertas',alertaRoutes);
 app.use('/api/configuracoes-alertas',configuracaoAlertaRoutes);
-
+app.use('/api/relatorios',relatorioRoutes);
 
 //TESTE DA API
 app.get('/api/teste', async (req, res) => {
