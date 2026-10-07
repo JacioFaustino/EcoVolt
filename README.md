@@ -296,15 +296,6 @@ ALERTAS
 DISPOSITIVOS_OFFLINE
 ```
 O usuário autenticado é associado automaticamente. O cliente não deve enviar `id_usuario`, `consumo_total_kWh`, `picos_consumo`, `anomalias_detectadas` ou `gerado_em`, pois esses campos são calculados ou preenchidos pela API.
-## ⚡ Regras de dados importantes
-- `capacidade_max_W` representa a capacidade elétrica máxima da sala em watts, não a quantidade de pessoas;
-- `potencia_ativa_W` representa potência instantânea;
-- `energia_intervalo_kWh` representa o consumo do intervalo;
-- `energia_acumulada_kWh` representa o consumo acumulado;
-- R5 compara o consumo total da hora atual com o histórico da mesma hora;
-- R7 depende da ausência de comunicação do dispositivo e não de uma leitura individual;
-- o front-end não deve acessar o banco diretamente;
-- o front-end não deve implementar novamente as regras de anomalia.
 ## 📡 Códigos HTTP
 | Código | Significado |
 |---|---|
