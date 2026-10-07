@@ -8,7 +8,7 @@ module.exports = {
     },
     tipo_parametro: S.STRING(50),
     valor_limite: S.DECIMAL(10, 2),
-    unidade_medida: S.STRING(10),
+    unidade_medida: S.STRING(20),
     status: { type: S.STRING(20), defaultValue: 'ATIVA' },
     acao_automatica: S.STRING(100),
     acionar_buzzer: { type: S.BOOLEAN, defaultValue: false },

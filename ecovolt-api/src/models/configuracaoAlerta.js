@@ -4,7 +4,7 @@ module.exports = (sequelize, DataTypes) => {
     id_sala: { type: DataTypes.INTEGER, allowNull: false },
     tipo_parametro: DataTypes.STRING(50),
     valor_limite: DataTypes.DECIMAL(10, 2),
-    unidade_medida: DataTypes.STRING(10),
+    unidade_medida: DataTypes.STRING(20),
     status: DataTypes.STRING(20),
     acao_automatica: DataTypes.STRING(100),
     acionar_buzzer: DataTypes.BOOLEAN,
