@@ -120,27 +120,23 @@ A URL base durante o desenvolvimento é:
 http://localhost:3000
 ```
 
-### Autenticação de usuários
-
-#### Login
-
+## 🔐 Autenticação
+A API possui dois tipos de autenticação:
+1. autenticação de usuários, utilizada pelo front-end;
+2. autenticação de dispositivos, utilizada pelo ESP32.
+### Login de usuário
 ```http
 POST /api/auth/login
+Content-Type: application/json
 ```
-
-Realiza o login de um usuário da plataforma.
-
-**Corpo da requisição:**
-
+Corpo:
 ```json
 {
   "email": "admin@ecovolt.ifrn.edu.br",
-  "senha": "123456"
+  "senha": "SUA_SENHA"
 }
 ```
-
-**Resposta de sucesso:**
-
+Resposta:
 ```json
 {
   "token": "JWT_DO_USUARIO",
@@ -152,53 +148,44 @@ Realiza o login de um usuário da plataforma.
   }
 }
 ```
-
-O token retornado deve ser enviado nas rotas protegidas usando o cabeçalho:
-
+Nas rotas protegidas, o front-end deve enviar:
 ```http
 Authorization: Bearer JWT_DO_USUARIO
 ```
-
----
-
-### Teste da API
-
-#### Verificar conexão com o banco
-
-```http
-GET /api/teste
-```
-
-Verifica se a API consegue se conectar ao banco de dados.
-
-**Resposta de sucesso:**
-
-```json
-{
-  "mensagem": "Conectado ao banco via Sequelize!"
-}
-```
-
----
-
-### Leituras do ESP32
-
-#### Registrar leitura
-
-```http
-POST /api/leituras
-```
-
-Recebe e registra os dados enviados pelo ESP32.
-
-Essa rota exige o token específico do dispositivo:
-
+### Token de dispositivo e hash
+O ESP32 utiliza um token próprio para enviar leituras:
 ```http
 Authorization: Bearer TOKEN_DO_DISPOSITIVO
 ```
-
-**Corpo da requisição:**
-
+O token original é exibido somente durante o cadastro ou a geração de um novo token. O banco armazena somente `token_hash`.
+O `token_hash` nunca deve ser exibido, enviado pelo front-end ou armazenado no firmware. O `mac_address` é apenas a identificação física do dispositivo e não substitui o token.
+## 🔌 Endpoints da API
+A API utiliza REST e JSON. As rotas protegidas exigem o JWT do usuário, exceto `POST /api/leituras`, que exige o token do dispositivo.
+### Teste da API
+```http
+GET /api/teste
+```
+Verifica a conexão com o banco.
+### Salas
+```http
+GET /api/salas
+GET /api/salas/:id/consumo-hora
+```
+A primeira lista as salas com a última leitura disponível. A segunda agrupa o consumo por hora.
+### Dispositivos
+```http
+GET /api/dispositivos
+POST /api/dispositivos
+POST /api/dispositivos/:id/gerar-token
+POST /api/dispositivos/:id/revogar-token
+```
+O token original é retornado somente na criação ou geração de novo token. `token_hash` não deve ser retornado.
+### Leituras
+Para o ESP32:
+```http
+POST /api/leituras
+```
+Exemplo:
 ```json
 {
   "id_sensor": 1,
@@ -213,273 +200,129 @@ Authorization: Bearer TOKEN_DO_DISPOSITIVO
   "estado_porta": "FECHADA"
 }
 ```
-
-O campo `estado_porta` aceita somente:
-
+`estado_porta` aceita somente `ABERTA` ou `FECHADA` e é enviado junto com a leitura.
+Para consultas autenticadas pelo usuário:
+```http
+GET /api/leituras
+GET /api/leituras/:id
+```
+Filtros possíveis para a listagem:
 ```text
-ABERTA
-FECHADA
+id_sensor
+id_sala
+data_inicio
+data_fim
+limite
+offset
 ```
-
-A API armazena os dados elétricos na tabela `leitura` e o estado da porta na tabela `estado_porta`.
-
-A API também verifica se o sensor pertence ao dispositivo autenticado.
-
-**Resposta de sucesso:**
-
+Exemplo:
 ```http
-201 Created
+GET /api/leituras?id_sala=3&limite=100&offset=0
 ```
-
-**Possíveis respostas de erro:**
-
-| Código | Descrição                          |
-| ------ | ---------------------------------- |
-| `400`  | Dados inválidos ou JSON malformado |
-| `401`  | Token ausente ou inválido          |
-| `403`  | Sensor não pertence ao dispositivo |
-| `429`  | Muitas requisições em pouco tempo  |
-| `500`  | Erro interno do servidor           |
-
----
-
-### Salas e consumo
-
-#### Listar salas
-
-```http
-GET /api/salas
-```
-
-Lista as salas cadastradas e apresenta a última leitura disponível de cada ambiente.
-
-Essa rota exige autenticação de usuário:
-
-```http
-Authorization: Bearer JWT_DO_USUARIO
-```
-
-#### Consultar consumo por hora
-
-```http
-GET /api/salas/:id/consumo-hora
-```
-
-Consulta o consumo agrupado por hora de uma sala.
-
-**Exemplo:**
-
-```http
-GET /api/salas/3/consumo-hora
-```
-
-**Resposta de exemplo:**
-
-```json
-[
-  {
-    "hora": 8,
-    "consumo_kWh": 4.2
-  },
-  {
-    "hora": 9,
-    "consumo_kWh": 5.8
-  }
-]
-```
-
----
-
-### Dispositivos(entidade para cada ESP32)
-
-As rotas de dispositivos exigem autenticação de usuário.
-
-#### Listar dispositivos
-
-```http
-GET /api/dispositivos
-```
-
-Lista os dispositivos cadastrados.
-
-O campo `token_hash` nunca é retornado pela API.
-
-#### Cadastrar dispositivo
-
-```http
-POST /api/dispositivos
-```
-
-Cadastra um ESP32 e gera um token exclusivo para ele.
-
-**Corpo da requisição:**
-
-```json
-{
-  "id_sala": 3,
-  "identificador": "ESP32-SALA102",
-  "mac_address": "AA:BB:CC:DD:EE:03",
-  "modelo": "ESP32 DevKit",
-  "intervalo_envio_segundos": 2
-}
-```
-
-**Resposta de sucesso:**
-
-```json
-{
-  "dispositivo": {
-    "id_dispositivo": 9,
-    "id_sala": 3,
-    "identificador": "ESP32-SALA102",
-    "mac_address": "AA:BB:CC:DD:EE:03",
-    "modelo": "ESP32 DevKit",
-    "intervalo_envio_segundos": 2,
-    "status_operacao": "ONLINE"
-  },
-  "token": "TOKEN_DO_DISPOSITIVO"
-}
-```
-
-O token original deve ser copiado e armazenado no firmware do ESP32. O banco de dados armazena somente o hash do token.
-
-#### Gerar novo token
-
-```http
-POST /api/dispositivos/:id/gerar-token
-```
-
-Gera um novo token para o dispositivo e invalida o token anterior.
-
-**Exemplo:**
-
-```http
-POST /api/dispositivos/9/gerar-token
-```
-
-#### Revogar token
-
-```http
-POST /api/dispositivos/:id/revogar-token
-```
-
-Revoga o token do dispositivo e desativa o equipamento.
-
-**Exemplo:**
-
-```http
-POST /api/dispositivos/9/revogar-token
-```
-
-Depois da revogação, o dispositivo não poderá mais enviar leituras à API.
-
----
-
 ### Alertas
-
-#### Listar alertas abertos
-
 ```http
 GET /api/alertas
+GET /api/alertas/:id
+PATCH /api/alertas/:id/encerrar
 ```
-
-Lista os alertas que estão com status `ABERTO`.
-
-#### Filtrar alertas
-
-```http
-GET /api/alertas?gravidade=ALTA
-```
-
-Filtros disponíveis:
-
+Filtros possíveis, conforme a implementação da API:
 ```text
 status
 gravidade
 tipo_alerta
 id_sala
 ```
-
-**Exemplo:**
-
-```http
-GET /api/alertas?id_sala=3&gravidade=ALTA
+As regras implementadas são:
+```text
+R1_CONSUMO_FORA_HORARIO
+R2_AR_FORA_HORARIO
+R3A_PORTA_ABERTA
+R3B_PORTA_ABERTA_PERSISTENTE
+R4_SOBRECARGA
+R5_PADRAO_HISTORICO
+R6_LIMITE_DIARIO
+R7_DISPOSITIVO_OFFLINE
+R8_FALHA_LEITURA
 ```
-
-#### Consultar alerta específico
-
-```http
-GET /api/alertas/:id
+Estados possíveis:
+```text
+PENDENTE
+ABERTO
+FECHADO
 ```
-
-**Exemplo:**
-
+### Configurações de alertas
 ```http
-GET /api/alertas/1
+GET /api/configuracoes-alertas
+POST /api/configuracoes-alertas
+PATCH /api/configuracoes-alertas/:id
+PATCH /api/configuracoes-alertas/:id/status
 ```
-
-#### Encerrar alerta
-
+Filtro por sala:
 ```http
-PATCH /api/alertas/:id/encerrar
+GET /api/configuracoes-alertas?id_sala=3
 ```
-
-Altera o status do alerta para `FECHADO` e registra o horário de encerramento.
-
-**Exemplo:**
-
+Exemplo de criação:
+```json
+{
+  "id_sala": 3,
+  "tipo_parametro": "R6_LIMITE_DIARIO",
+  "valor_limite": 25,
+  "unidade_medida": "kWh",
+  "status": "ATIVA",
+  "acionar_buzzer": false,
+  "tempo_persistencia_segundos": 0,
+  "duracao_buzzer_segundos": 0
+}
+```
+### Relatórios
 ```http
-PATCH /api/alertas/1/encerrar
+GET /api/relatorios
+GET /api/relatorios/:id
+POST /api/relatorios
 ```
-
----
-
-### Autenticação das rotas
-
-As rotas da plataforma web utilizam o token JWT do usuário:
-
-```http
-Authorization: Bearer JWT_DO_USUARIO
+Exemplo de geração:
+```json
+{
+  "id_sala": 3,
+  "tipo_relatorio": "CONSUMO",
+  "periodo_inicio": "2026-10-01",
+  "periodo_fim": "2026-10-06"
+}
 ```
-
-A rota utilizada pelo ESP32 utiliza o token específico do dispositivo:
-
-```http
-Authorization: Bearer TOKEN_DO_DISPOSITIVO
+Tipos aceitos:
+```text
+CONSUMO
+ALERTAS
+DISPOSITIVOS_OFFLINE
 ```
-
-Os tokens de usuários e dispositivos possuem finalidades diferentes e são validados por middlewares separados.
-
----
-
-### Códigos HTTP utilizados
-
-| Código | Significado                            |
-| ------ | -------------------------------------- |
-| `200`  | Requisição processada com sucesso      |
-| `201`  | Registro criado com sucesso            |
-| `400`  | Dados enviados são inválidos           |
-| `401`  | Autenticação ausente ou inválida       |
-| `403`  | Usuário ou dispositivo sem permissão   |
-| `404`  | Registro não encontrado                |
-| `429`  | Limite de requisições excedido         |
-| `500`  | Erro interno do servidor               |
-| `503`  | Serviço ou banco de dados indisponível |
-
----
-
+O usuário autenticado é associado automaticamente. O cliente não deve enviar `id_usuario`, `consumo_total_kWh`, `picos_consumo`, `anomalias_detectadas` ou `gerado_em`, pois esses campos são calculados ou preenchidos pela API.
+## ⚡ Regras de dados importantes
+- `capacidade_max_W` representa a capacidade elétrica máxima da sala em watts, não a quantidade de pessoas;
+- `potencia_ativa_W` representa potência instantânea;
+- `energia_intervalo_kWh` representa o consumo do intervalo;
+- `energia_acumulada_kWh` representa o consumo acumulado;
+- R5 compara o consumo total da hora atual com o histórico da mesma hora;
+- R7 depende da ausência de comunicação do dispositivo e não de uma leitura individual;
+- o front-end não deve acessar o banco diretamente;
+- o front-end não deve implementar novamente as regras de anomalia.
+## 📡 Códigos HTTP
+| Código | Significado |
+|---|---|
+| 200 | Requisição processada com sucesso |
+| 201 | Registro criado com sucesso |
+| 400 | Dados inválidos |
+| 401 | Autenticação ausente ou inválida |
+| 403 | Usuário ou dispositivo sem permissão |
+| 404 | Registro não encontrado |
+| 429 | Limite de requisições excedido |
+| 500 | Erro interno do servidor |
+| 503 | Serviço ou banco indisponível |
 ## 👥 Equipe
-
 - Jacio Faustino de Souza
 - João Victor Ferreira do Nascimento
 - Joyce Karenyne Ayres da Costa
 - Kalyne Maryeli Brilhante Carlos
-
 **Orientador:** Prof. Dr. Danyel Aguiar
-
----
-
 ## 🏫 Instituição
-
 Instituto Federal de Educação, Ciência e Tecnologia do Rio Grande do Norte  
 Campus Santa Cruz – Curso Técnico em Informática – 2026
