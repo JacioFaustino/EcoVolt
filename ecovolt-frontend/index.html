@@ -1,83 +1,13 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>EcoVolt – Monitoramento de energia</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-</head>
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EcoVolt</title><link rel="stylesheet" href="css/style.css"></head>
 <body>
-  <aside class="sidebar">
-    <div class="brand"><span class="bolt">⚡</span>EcoVolt</div>
-    <nav aria-label="Principal">
-      <a href="#dashboard" data-view="dashboard"><span aria-hidden="true">◧</span>Dashboard</a>
-      <a href="#salas" data-view="salas"><span aria-hidden="true">▦</span>Salas</a>
-      <a href="#historico" data-view="historico"><span aria-hidden="true">◷</span>Histórico</a>
-      <a href="#config" data-view="config"><span aria-hidden="true">⚙</span>Alertas</a>
-    </nav>
-  </aside>
-
-  <main>
-    <header class="topbar">
-      <h1 id="titulo">Dashboard geral</h1>
-      <span class="live"><i></i><span>Telemetria ao vivo</span></span>
-    </header>
-
-    <section id="dashboard" class="view" aria-labelledby="titulo">
-      <div class="grid kpis">
-        <article class="card kpi"><h3>Consumo total hoje</h3><strong id="kpi-consumo">–</strong></article>
-        <article class="card kpi"><h3>Salas monitoradas</h3><strong id="kpi-salas">–</strong></article>
-        <article class="card kpi"><h3>Economia estimada</h3><strong id="kpi-economia">–</strong><small id="kpi-economia-sub"></small></article>
-      </div>
-      <div class="grid charts">
-        <article class="card"><h2>Consumo por hora (kWh)</h2><div class="chart"><canvas id="chart-hora" aria-label="Gráfico de linha do consumo por hora" role="img"></canvas></div></article>
-        <article class="card"><h2>Ranking de salas (kWh)</h2><div class="chart"><canvas id="chart-ranking" aria-label="Gráfico de barras com o ranking de consumo por sala" role="img"></canvas></div></article>
-      </div>
-    </section>
-
-    <section id="salas" class="view" aria-label="Detalhamento por sala">
-      <div class="grid rooms" id="rooms"></div>
-    </section>
-
-    <section id="historico" class="view" aria-label="Histórico e relatórios">
-      <div class="toolbar">
-        <div class="filters" role="group" aria-label="Período">
-          <button data-periodo="diario" class="active">Diário</button>
-          <button data-periodo="semanal">Semanal</button>
-          <button data-periodo="mensal">Mensal</button>
-          <button data-periodo="anual">Anual</button>
-        </div>
-        <button class="btn" id="btn-pdf">Exportar PDF</button>
-      </div>
-      <article class="card"><h2>Histórico de economia (kWh)</h2><div class="chart tall"><canvas id="chart-hist" aria-label="Gráfico do histórico de economia" role="img"></canvas></div></article>
-    </section>
-
-    <section id="config" class="view" aria-label="Configurações e alertas">
-      <article class="card narrow">
-        <h2>Regras de alerta</h2>
-        <ul class="rules">
-          <li>
-            <div><strong>Pico de consumo</strong><p>Avisa quando uma sala passa do limite de kWh definido para o horário.</p></div>
-            <label class="switch"><input type="checkbox" role="switch" data-key="picoConsumo" aria-label="Pico de consumo"><span></span></label>
-          </li>
-          <li>
-            <div><strong>Ar-condicionado fora do horário</strong><p>Avisa quando o ar fica ligado com a sala fora do horário de aula.</p></div>
-            <label class="switch"><input type="checkbox" role="switch" data-key="arForaHorario" aria-label="Ar-condicionado fora do horário"><span></span></label>
-          </li>
-          <li>
-            <div><strong>Falha de sensor</strong><p>Avisa quando um sensor deixa de enviar leituras.</p></div>
-            <label class="switch"><input type="checkbox" role="switch" data-key="falhaSensor" aria-label="Falha de sensor"><span></span></label>
-          </li>
-        </ul>
-        <p id="save-status" class="muted" aria-live="polite"></p>
-      </article>
-    </section>
-  </main>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script src="app.js"></script>
-</body>
-</html>
+<aside><div class="logo">Eco<b>Volt</b></div>
+<nav><a href="#/" data-r="">Visão geral</a><a href="#/salas" data-r="salas">Salas</a><a href="#/alertas" data-r="alertas">Alertas</a>
+<a href="#/configuracoes" data-r="configuracoes">Configuração de alertas</a><a href="#/relatorios" data-r="relatorios">Relatórios</a></nav>
+<div class="user"><span id="usuario"></span><button id="sair">Sair</button></div></aside>
+<main id="conteudo"></main>
+<dialog id="dlg"><form id="fcfg"></form></dialog><div id="toast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="js/config.js"></script><script src="js/api.js"></script><script src="js/app.js"></script>
+</body></html>
