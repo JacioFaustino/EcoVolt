@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EcoVolt · Entrar</title><link rel="stylesheet" href="css/style.css"></head>
+<body class="login"><form id="f" class="caixa">
+<div class="logo">Eco<b>Volt</b></div><p class="mut">Monitoramento de energia em salas e laboratórios</p>
+<label>E-mail<input name="email" type="email" required autocomplete="username"></label>
+<label>Senha<input name="senha" type="password" required autocomplete="current-password"></label>
+<p id="msg" class="erro" role="alert"></p><button class="pri">Entrar</button></form>
+<script src="js/config.js"></script><script src="js/api.js"></script>
+<script>
+f.onsubmit = async e => {
+  e.preventDefault(); msg.textContent = '';
+  try {
+    const d = await apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: f.email.value.trim(), senha: f.senha.value }) });
+    Sessao.salvar(d.token, d.usuario); location.href = 'index.html';
+  } catch (err) { msg.textContent = err.message; }
+};
+</script></body></html>
