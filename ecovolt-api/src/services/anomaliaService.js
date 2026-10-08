@@ -15,6 +15,25 @@ const DIAS_SEMANA = [
   'SAB'
 ];
 
+function formatarDataSqlUtc(data) {
+  const pad = (numero) =>
+    String(numero).padStart(2, '0');
+
+  return (
+    data.getUTCFullYear() +
+    '-' +
+    pad(data.getUTCMonth() + 1) +
+    '-' +
+    pad(data.getUTCDate()) +
+    ' ' +
+    pad(data.getUTCHours()) +
+    ':' +
+    pad(data.getUTCMinutes()) +
+    ':' +
+    pad(data.getUTCSeconds())
+  );
+}
+
 async function obterContextoLeitura(
   leitura
 ) {
@@ -586,7 +605,7 @@ async function verificarR5({
   const inicioHora =
     new Date(instante);
 
-  inicioHora.setMinutes(
+  inicioHora.setUTCMinutes(
     0,
     0,
     0
@@ -595,21 +614,33 @@ async function verificarR5({
   const fimHora =
     new Date(inicioHora);
 
-  fimHora.setHours(
-    fimHora.getHours() + 1
+  fimHora.setUTCHours(
+    fimHora.getUTCHours() + 1
   );
 
   const quatroSemanasAntes =
     new Date(inicioHora);
 
-  quatroSemanasAntes.setDate(
-    quatroSemanasAntes.getDate() - 28
+  quatroSemanasAntes.setUTCDate(
+    quatroSemanasAntes.getUTCDate() - 28
   );
+
+  const inicioHoraSql =
+    formatarDataSqlUtc(inicioHora);
+
+  const fimHoraSql =
+    formatarDataSqlUtc(fimHora);
+
+  const quatroSemanasAntesSql =
+    formatarDataSqlUtc(
+      quatroSemanasAntes
+    );
 
   const [resultado] =
     await db.sequelize.query(`
       SELECT
-        AVG(consumo_hora) AS media_historica,
+        AVG(consumo_hora)
+          AS media_historica,
         STDDEV_POP(consumo_hora)
           AS desvio_historico
       FROM (
@@ -643,10 +674,10 @@ async function verificarR5({
     `, {
       replacements: [
         contexto.id_sala,
-        quatroSemanasAntes,
-        inicioHora,
-        inicioHora,
-        inicioHora
+        quatroSemanasAntesSql,
+        inicioHoraSql,
+        inicioHoraSql,
+        inicioHoraSql
       ]
     });
 
@@ -660,8 +691,9 @@ async function verificarR5({
       resultado[0].desvio_historico
     );
 
-const [consumoAtualResultado] =
-  await db.sequelize.query(`
+  const [
+    consumoAtualResultado
+  ] = await db.sequelize.query(`
     SELECT
       COALESCE(
         SUM(l.energia_intervalo_kWh),
@@ -679,16 +711,16 @@ const [consumoAtualResultado] =
   `, {
     replacements: [
       contexto.id_sala,
-      inicioHora,
-      fimHora
+      inicioHoraSql,
+      fimHoraSql
     ]
   });
 
-const consumoAtual =
-  Number(
-    consumoAtualResultado[0]
-      .consumo_atual
-  );
+  const consumoAtual =
+    Number(
+      consumoAtualResultado[0]
+        .consumo_atual
+    );
 
   if (
     !Number.isFinite(media) ||
@@ -699,10 +731,13 @@ const consumoAtual =
   }
 
   const numeroDesvios =
-    Number(configuracao.valor_limite);
+    Number(
+      configuracao.valor_limite
+    );
 
   const limite =
-    media + numeroDesvios * desvio;
+    media +
+    numeroDesvios * desvio;
 
   const condicaoAtiva =
     consumoAtual > limite;
@@ -715,7 +750,8 @@ const consumoAtual =
       'R5_PADRAO_HISTORICO',
     descricao:
       'Consumo acima do padrão histórico',
-    valorDetectado: consumoAtual,
+    valorDetectado:
+      consumoAtual,
     gravidade: 'BAIXA',
     condicaoAtiva,
     timestamp: instante,
