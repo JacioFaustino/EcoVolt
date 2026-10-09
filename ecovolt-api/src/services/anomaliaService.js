@@ -15,6 +15,8 @@ const DIAS_SEMANA = [
   'SAB'
 ];
 
+const MINIMO_PONTOS_HISTORICOS_R5 = 3;
+
 function formatarDataSqlUtc(data) {
   const pad = (numero) =>
     String(numero).padStart(2, '0');
@@ -648,7 +650,9 @@ async function verificarR5({
         AVG(consumo_hora)
           AS media_historica,
         STDDEV_POP(consumo_hora)
-          AS desvio_historico
+          AS desvio_historico,
+        COUNT(*)
+          AS pontos_historicos
       FROM (
         SELECT
           DATE_FORMAT(
@@ -697,6 +701,11 @@ async function verificarR5({
       resultado[0].desvio_historico
     );
 
+  const pontosHistoricos =
+    Number(
+      resultado[0].pontos_historicos
+    );
+
   const [
     consumoAtualResultado
   ] = await db.sequelize.query(`
@@ -731,7 +740,12 @@ async function verificarR5({
   if (
     !Number.isFinite(media) ||
     !Number.isFinite(desvio) ||
-    !Number.isFinite(consumoAtual)
+    !Number.isFinite(consumoAtual) ||
+    !Number.isFinite(
+      pontosHistoricos
+    ) ||
+    pontosHistoricos <
+      MINIMO_PONTOS_HISTORICOS_R5
   ) {
     return null;
   }

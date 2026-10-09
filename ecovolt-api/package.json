@@ -5,7 +5,7 @@
  "scripts": {
   "dev": "node server.js",
   "start": "node server.js",
-  "test": "node --require ./tests/helpers/testEnv.js --test \"tests/**/*.test.js\"",
+  "test": "node --require ./tests/helpers/testEnv.js --test --test-concurrency=1 \"tests/**/*.test.js\"",
   "check": "node --check server.js"
 },
   "keywords": [],
