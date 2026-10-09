@@ -479,7 +479,7 @@ async function verificarR6({
   const inicioDia =
     new Date(instante);
 
-  inicioDia.setHours(
+  inicioDia.setUTCHours(
     0,
     0,
     0,
@@ -489,9 +489,15 @@ async function verificarR6({
   const fimDia =
     new Date(inicioDia);
 
-  fimDia.setDate(
-    fimDia.getDate() + 1
+  fimDia.setUTCDate(
+    fimDia.getUTCDate() + 1
   );
+
+  const inicioDiaSql =
+    formatarDataSqlUtc(inicioDia);
+
+  const fimDiaSql =
+    formatarDataSqlUtc(fimDia);
 
   const [resultado] =
     await db.sequelize.query(`
@@ -511,8 +517,8 @@ async function verificarR6({
     `, {
       replacements: [
         contexto.id_sala,
-        inicioDia,
-        fimDia
+        inicioDiaSql,
+        fimDiaSql
       ]
     });
 

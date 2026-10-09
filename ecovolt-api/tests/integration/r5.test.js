@@ -170,15 +170,6 @@ test(
         AND l.timestamp < '2026-10-08 11:00:00'
     `);
 
-    console.log(
-      'Histórico usado pela R5:',
-      historicoDiagnostico
-    );
-
-    console.log(
-      'Consumo atual usado pela R5:',
-      atualDiagnostico
-    );
 
     const alerta =
       await verificarR5({
