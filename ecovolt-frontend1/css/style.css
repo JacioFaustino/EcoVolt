@@ -22,7 +22,7 @@ tr.aberto td:first-child{box-shadow:inset 4px 0 var(--er)}
 .tag{display:inline-block;padding:1px 9px;border-radius:99px;border:1px solid var(--bd);font-size:12.5px;white-space:nowrap}
 .tag.on{border-color:var(--ok);color:var(--ok)}.tag.er{border-color:var(--er);color:var(--er)}.tag.wa{border-color:#c98a00;color:#c98a00}
 .st{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.st i{width:10px;height:10px;border-radius:50%;background:var(--nd)}
-.st.on i{background:var(--ok)}.st.off i{background:var(--er)}
+.st.on i{background:var(--ok)}.st.off i{background:var(--er)}.st.nd i{background:var(--nd)}
 .filtros{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:14px}
 label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--mut)}
 input,select,button{font:inherit;padding:7px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf);color:var(--ink)}
@@ -42,3 +42,9 @@ body.login{align-items:center;justify-content:center}
 .caixa{width:min(380px,92vw);background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:26px;display:flex;flex-direction:column;gap:12px}
 .caixa .logo{padding:0;color:var(--ink)}
 @media(max-width:760px){body{flex-direction:column}aside{width:auto;height:auto;position:static}nav{flex-direction:row;flex-wrap:wrap}main{padding:18px 14px}}
+
+.banner{background:var(--sf);border:1px solid var(--bd);border-left:4px solid var(--volt);border-radius:6px;padding:9px 14px;margin:0 0 14px;color:var(--mut);font-size:14px}
+h3{font-size:16px;margin:18px 0 8px}
+dialog .detalhe{display:flex;flex-direction:column;gap:6px}
+input:disabled{opacity:.55;cursor:not-allowed}
+dialog:has(.detalhe){width:min(640px,94vw)}
