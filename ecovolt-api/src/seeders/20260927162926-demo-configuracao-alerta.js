@@ -66,8 +66,8 @@ module.exports = {
       {
         id_sala: 1,
         tipo_parametro: 'R4_SOBRECARGA',
-        valor_limite: 5000,
-        unidade_medida: 'W',
+        valor_limite: NULL,
+        unidade_medida: NULL,
         status: 'ATIVA',
         acao_automatica:
           'NOTIFICAR_ADMINISTRADOR_TECNICO',
@@ -87,7 +87,7 @@ module.exports = {
         acao_automatica:
           'NOTIFICAR_ADMINISTRADOR',
         acionar_buzzer: false,
-        tempo_persistencia_segundos: 0,
+        tempo_persistencia_segundos: NULL,
         duracao_buzzer_segundos: 0
       },
 
@@ -100,7 +100,7 @@ module.exports = {
         acao_automatica:
           'NOTIFICAR_ADMINISTRADOR',
         acionar_buzzer: false,
-        tempo_persistencia_segundos: 0,
+        tempo_persistencia_segundos: NULL,
         duracao_buzzer_segundos: 0
       },
 

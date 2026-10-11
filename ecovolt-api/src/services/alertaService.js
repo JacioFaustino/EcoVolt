@@ -37,7 +37,8 @@ async function listar(filtros = {}) {
     where,
     include: [
       db.Sala,
-      db.ConfiguracaoAlerta
+      db.ConfiguracaoAlerta,
+      db.Atuador
     ],
     order: [
       ['timestamp_inicio', 'DESC']

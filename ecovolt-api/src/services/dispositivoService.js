@@ -13,6 +13,9 @@ async function listar() {
     attributes: {
       exclude: ['token_hash']
     },
+    include: [
+      db.Atuador
+    ],
     order: [
       ['id_dispositivo', 'ASC']
     ]
