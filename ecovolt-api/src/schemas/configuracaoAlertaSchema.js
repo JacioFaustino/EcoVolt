@@ -25,7 +25,7 @@ const configuracaoAlertaSchema = z.object({
   unidade_medida: z.string()
     .trim()
     .min(1)
-    .max(10),
+    .max(20),
 
   status: z.enum([
     'ATIVA',
