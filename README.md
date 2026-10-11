@@ -21,7 +21,7 @@ Fornecer à gestão do campus informações sobre o consumo de energia de cada a
 - Detecção de anomalias com regras configuráveis
 - Alerta sonoro local (buzzer) quando a porta permanece aberta com o ar-condicionado ligado
 - Alertas na plataforma para administradores e técnicos
-- Histórico de calibração dos sensores
+- Histórico de calibração dos sensores(planejamento futuro/ainda não implementado)
 - Geração de relatórios de consumo
 
 ---
