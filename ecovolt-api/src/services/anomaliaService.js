@@ -118,6 +118,18 @@ function obterInstanteLeitura(
     : instante;
 }
 
+function alertaEstaAtivo(
+  alerta
+) {
+  return (
+    Boolean(alerta) &&
+    (
+      alerta.status === 'PENDENTE' ||
+      alerta.status === 'ABERTO'
+    )
+  );
+}
+
 function horaEmSegundos(valor) {
   if (!valor) {
     return null;
@@ -787,8 +799,10 @@ async function verificarLeitura(
       leitura
     );
 
+  const comandos = [];
+
   if (!contexto) {
-    return leitura;
+    return { leitura, comandos };
   }
 
   const regras = [
@@ -828,11 +842,26 @@ async function verificarLeitura(
         tipoParametro
       );
 
-    if (configuracao) {
+    if (!configuracao) {
+      continue;
+    }
+
+    const alerta =
       await verificar({
         leitura,
         contexto,
         configuracao
+      });
+
+    if (configuracao.acionar_buzzer) {
+      comandos.push({
+        acionar_buzzer:
+          alertaEstaAtivo(alerta),
+        duracao_buzzer_segundos:
+          Number(
+            configuracao
+              .duracao_buzzer_segundos
+          ) || 0
       });
     }
   }
@@ -843,7 +872,7 @@ async function verificarLeitura(
     );
 
   if (!sensorPorta) {
-    return leitura;
+    return { leitura, comandos };
   }
 
   const estadoPorta =
@@ -852,7 +881,7 @@ async function verificarLeitura(
     );
 
   if (!estadoPorta) {
-    return leitura;
+    return { leitura, comandos };
   }
 
   const configuracaoR3A =
@@ -871,24 +900,44 @@ async function verificarLeitura(
     configuracaoR3A &&
     configuracaoR3B
   ) {
-    await verificarR3A({
-      leitura,
-      contexto,
-      estadoPorta,
-      configuracao:
-        configuracaoR3A
-    });
+    const alertaR3A =
+      await verificarR3A({
+        leitura,
+        contexto,
+        estadoPorta,
+        configuracao:
+          configuracaoR3A
+      });
 
-    await verificarR3B({
-      leitura,
-      contexto,
-      estadoPorta,
-      configuracaoR3A,
-      configuracaoR3B
-    });
+    const alertaR3B =
+      await verificarR3B({
+        leitura,
+        contexto,
+        estadoPorta,
+        configuracaoR3A,
+        configuracaoR3B
+      });
+
+    if (configuracaoR3A.acionar_buzzer) {
+      const r3aAtivo =
+        alertaEstaAtivo(alertaR3A);
+
+      const r3bAtivo =
+        alertaEstaAtivo(alertaR3B);
+
+      comandos.push({
+        acionar_buzzer:
+          r3aAtivo && !r3bAtivo,
+        duracao_buzzer_segundos:
+          Number(
+            configuracaoR3A
+              .duracao_buzzer_segundos
+          ) || 0
+      });
+    }
   }
 
-  return leitura;
+  return { leitura, comandos };
 }
 
 module.exports = {

@@ -36,7 +36,8 @@ async function listar(filtros = {}) {
   return db.Alerta.findAll({
     where,
     include: [
-      db.Sala
+      db.Sala,
+      db.ConfiguracaoAlerta
     ],
     order: [
       ['timestamp_inicio', 'DESC']

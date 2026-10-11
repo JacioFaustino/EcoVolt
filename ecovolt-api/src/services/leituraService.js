@@ -84,7 +84,8 @@ async function criarLeitura({
   }
 }
 
-  await verificarLeitura(leitura);
+  const resultadoVerificacao =
+    await verificarLeitura(leitura);
 
   await dispositivo.update({
     ultimo_contato: new Date(),
@@ -93,7 +94,12 @@ async function criarLeitura({
   
   await fecharAlertaDispositivoOnline(dispositivo);
 
-  return leitura;
+  return {
+    ...leitura.toJSON(),
+    comandos:
+      resultadoVerificacao.comandos ||
+      []
+  };
 }
 
 async function listarLeituras({

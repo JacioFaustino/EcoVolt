@@ -4,18 +4,30 @@ const {
   Op
 } = db.Sequelize;
 
+const MULTIPLICADOR_PADRAO_OFFLINE = 5;
+
+async function obterConfiguracaoR7(
+  idSala
+) {
+  return db.ConfiguracaoAlerta.findOne({
+    where: {
+      id_sala: idSala,
+      tipo_parametro:
+        'R7_DISPOSITIVO_OFFLINE',
+      status: 'ATIVA'
+    }
+  });
+}
+
 async function criarAlertaDispositivoOffline(
-  dispositivo
+  dispositivo,
+  configuracaoPreCarregada
 ) {
   const configuracao =
-    await db.ConfiguracaoAlerta.findOne({
-      where: {
-        id_sala: dispositivo.id_sala,
-        tipo_parametro:
-          'R7_DISPOSITIVO_OFFLINE',
-        status: 'ATIVA'
-      }
-    });
+    configuracaoPreCarregada ||
+    await obterConfiguracaoR7(
+      dispositivo.id_sala
+    );
 
   if (!configuracao) {
     return;
@@ -106,8 +118,30 @@ async function atualizarDispositivosOffline() {
       continue;
     }
 
+    const configuracao =
+      await obterConfiguracaoR7(
+        dispositivo.id_sala
+      );
+
+    const valorLimiteConfigurado =
+      configuracao
+        ? Number(
+            configuracao.valor_limite
+          )
+        : NaN;
+
+    const multiplicador =
+      Number.isFinite(
+        valorLimiteConfigurado
+      ) &&
+      valorLimiteConfigurado > 0
+        ? valorLimiteConfigurado
+        : MULTIPLICADOR_PADRAO_OFFLINE;
+
     const limite =
-      intervalo * 5 * 1000;
+      intervalo *
+      multiplicador *
+      1000;
 
     const ultimoContato =
       new Date(
@@ -125,7 +159,8 @@ async function atualizarDispositivosOffline() {
       });
 
       await criarAlertaDispositivoOffline(
-        dispositivo
+        dispositivo,
+        configuracao
       );
     }
   }
