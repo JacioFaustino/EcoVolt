@@ -121,6 +121,23 @@ async function listar() {
       GROUP BY id_sala
     `);
 
+  const [sensores] =
+    await db.sequelize.query(`
+      SELECT
+        d.id_sala,
+        se.id_sensor,
+        se.nome,
+        se.tipo,
+        se.modelo,
+        se.unidade_medida,
+        se.status
+      FROM sensor se
+      JOIN dispositivo d
+        ON d.id_dispositivo =
+           se.id_dispositivo
+      ORDER BY se.id_sensor
+    `);
+
   const agregacoesPorSala = new Map(
     agregacoes.map((linha) => [
       Number(linha.id_sala),
@@ -134,6 +151,25 @@ async function listar() {
       Number(linha.alertas_abertos)
     ])
   );
+
+  const sensoresPorSala = new Map();
+
+  sensores.forEach((sensor) => {
+    const idSala = Number(sensor.id_sala);
+
+    if (!sensoresPorSala.has(idSala)) {
+      sensoresPorSala.set(idSala, []);
+    }
+
+    sensoresPorSala.get(idSala).push({
+      id_sensor: sensor.id_sensor,
+      nome: sensor.nome,
+      tipo: sensor.tipo,
+      modelo: sensor.modelo,
+      unidade_medida: sensor.unidade_medida,
+      status: sensor.status
+    });
+  });
 
   return linhas.map((linha) => {
     const agregacao = agregacoesPorSala.get(
@@ -154,7 +190,11 @@ async function listar() {
       alertas_abertos:
         alertasPorSala.get(
           Number(linha.id_sala)
-        ) || 0
+        ) || 0,
+      sensores:
+        sensoresPorSala.get(
+          Number(linha.id_sala)
+        ) || []
     };
   });
 }

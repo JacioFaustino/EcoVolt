@@ -5,6 +5,7 @@ module.exports = (sequelize, DataTypes) => {
     nome: DataTypes.STRING(50),
     tipo: DataTypes.STRING(30),
     modelo: DataTypes.STRING(50),
+    unidade_medida: DataTypes.STRING(20),
     status: DataTypes.STRING(20)
   }, { tableName: 'sensor', timestamps: false });
 

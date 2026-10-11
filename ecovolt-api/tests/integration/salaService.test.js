@@ -102,6 +102,25 @@ test(
       'number'
     );
 
+        assert.ok(
+      Array.isArray(salaAntes.sensores),
+      'sensores deveria ser um array'
+    );
+
+    assert.ok(
+      salaAntes.sensores.some(
+        (sensor) => sensor.tipo === 'CORRENTE'
+      ),
+      'A sala 1 deveria ter um sensor de corrente'
+    );
+
+    assert.ok(
+      salaAntes.sensores.some(
+        (sensor) => sensor.tipo === 'PORTA'
+      ),
+      'A sala 1 deveria ter um sensor de porta'
+    );
+
     let leitura = null;
     let alerta = null;
 

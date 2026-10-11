@@ -171,7 +171,7 @@ Verifica a conexão com o banco.
 GET /api/salas
 GET /api/salas/:id/consumo-hora
 ```
-A primeira lista as salas com dispositivo e sensor de corrente, com a última leitura disponível e os campos `status_operacao`, `capacidade_max_W`, `horario_inicio`, `horario_fim`, `dias_funcionamento`, `estado_porta` (último estado registrado do sensor de porta), `consumo_dia_kWh`, `consumo_mes_kWh`, `pico_potencia_W` (dia e mês correntes, em UTC) e `alertas_abertos`.
+A primeira lista as salas com dispositivo e sensor de corrente, com a última leitura disponível e os campos `status_operacao`, `capacidade_max_W`, `horario_inicio`, `horario_fim`, `dias_funcionamento`, `estado_porta` (último estado registrado do sensor de porta), `consumo_dia_kWh`, `consumo_mes_kWh`, `pico_potencia_W` (dia e mês correntes, em UTC), `alertas_abertos` e `sensores` (lista por sala com `nome`, `tipo`, `modelo`, `unidade_medida` e `status`).
 
 A segunda agrupa o consumo por hora (UTC) e aceita, opcionalmente, `data_inicio` e `data_fim` no formato `YYYY-MM-DD` (dias inclusivos). Sem esses parâmetros, soma todo o histórico.
 ### Dispositivos
@@ -258,6 +258,9 @@ id_sala
 data_inicio
 data_fim
 ```
+
+Sem `status`, a listagem assume `ABERTO`. `status=TODOS` desativa esse filtro. `data_inicio` e `data_fim` (`YYYY-MM-DD`, dias inclusivos, em UTC) filtram por `timestamp_inicio`.
+
 As regras implementadas são:
 ```text
 R1_CONSUMO_FORA_HORARIO

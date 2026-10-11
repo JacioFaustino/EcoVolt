@@ -101,26 +101,17 @@ O front segue a API.
 | Dispositivo: `nome`, `intervalo_leitura_segundos` | `identificador`, `intervalo_envio_segundos` |
 | `status_operacao`: ONLINE ou OFFLINE | Também `INATIVO` (token revogado), exibido em cinza |
 | `GET /api/leituras` devolve uma lista | Devolve `{ dados, total, limite, offset }` |
-| Alertas filtráveis por período e por status | Sem filtro de período; sem `status=TODOS` (sem `status`, assume `ABERTO`) |
+| Alertas filtráveis por período e por status | Filtros `data_inicio`/`data_fim` e `status=TODOS` implementados (sem `status`, assume `ABERTO`) |
 
-## Pedidos para o back-end
+## Ajustes necessários no front-end
 
-Hoje a tela mostra "—" (com um aviso amarelo) nestes pontos. O front já lê os nomes de campo abaixo, então os dados aparecem sozinhos quando a API passar a enviá-los.
+A API já entrega os campos e filtros que estavam pendentes, inclusive `sensores` por sala (`nome`, `tipo`, `modelo`, `unidade_medida`, `status`). Para o front consumir o que é novo, faltam estes ajustes:
 
-**`GET /api/salas`** devolve só `id_sala`, `nome`, `localizacao`, `potencia_ativa_W` e `timestamp`, e apenas de salas com dispositivo e sensor de corrente. Faltam:
-
-| Campo | Uso |
+| Onde | Ajuste |
 |---|---|
-| `status_operacao` | Status online/offline sem depender de `/api/dispositivos` (que dá 403 para perfil USUARIO) |
-| `capacidade_max_W`, `horario_inicio`, `horario_fim`, `dias_funcionamento` | Telas de salas e de detalhe |
-| `consumo_dia_kWh`, `consumo_mes_kWh` | Cards do dashboard e da sala |
-| `estado_porta` (`ABERTA`, `FECHADA` ou `null`) | Estado da porta (hoje nenhuma rota devolve) |
-| `alertas_abertos` | Contagem por sala |
-| `pico_potencia_W` | "Maior pico de potência" (hoje o card mostra a maior potência atual) |
-| `sensores` (`nome`, `tipo`, `unidade_medida`, `status`) | Tabela de sensores da sala |
+| `GET /api/salas/:id/consumo-hora` | Passar `data_inicio` e `data_fim` (ex.: o dia de hoje) para o gráfico virar "consumo de hoje por hora". Sem parâmetros, a rota soma todo o histórico. |
+| Tela de alertas | Adicionar a opção "Todos" no `<select name="status">`: `status=TODOS` desativa o filtro de status (sem `status`, a API assume `ABERTO`). |
+| `js/config.js` | Trocar `API_SUPORTA_PERIODO_ALERTAS` para `true`: a API já aceita `data_inicio`/`data_fim` (dias inclusivos, em UTC). |
+| Banner de status | A API agora envia `status_operacao` em `GET /api/salas`; o aviso "status indisponível" só deve aparecer quando o campo não vier. |
 
-**`GET /api/alertas`**: aceitar `data_inicio`, `data_fim` e `status=TODOS`. Depois, mude `API_SUPORTA_PERIODO_ALERTAS` para `true` em `js/config.js`.
-
-**`GET /api/salas/:id/consumo-hora`**: soma o histórico inteiro agrupando só pela hora do dia, e a hora está em UTC. Por isso o gráfico se chama "Energia por hora do dia (histórico)". Para "consumo por hora de hoje", a rota precisa de filtro de data.
-
-**`POST /api/configuracoes-alertas`**: o schema limita `unidade_medida` a 10 caracteres, mas o seed grava `DESVIOS_PADRAO` (14). Editar a unidade de uma R5 do seed dá erro 400 (editar só o limite funciona). Sugestão: subir o máximo para 20.
+Já ajustado: `maxlength` da unidade em `app.js` (20 caracteres, igual ao schema da API).
