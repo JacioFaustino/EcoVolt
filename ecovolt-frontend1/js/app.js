@@ -234,7 +234,7 @@ function iniciar() {
       <label>Sala<select name="id_sala" ${novo ? 'required' : 'disabled'}>${opcoes(salasG, c.id_sala)}</select></label>
       <label>Regra<select name="tipo_parametro" ${novo ? 'required' : 'disabled'}>${Object.entries(NOMES).map(([k, n]) => `<option value="${k}" ${k === c.tipo_parametro ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       ${campo('valor_limite', 'Limite', 'number', 'step="any" min="0" required')}
-      ${campo('unidade_medida', 'Unidade (máx. 10 caracteres)', 'text', 'required maxlength="10"')}
+      ${campo('unidade_medida', 'Unidade (máx. 20 caracteres)', 'text', 'required maxlength="20"')}
       ${campo('tempo_persistencia_segundos', 'Persistência (s)', 'number', 'min="0" step="1"')}
       ${campo('duracao_buzzer_segundos', 'Duração do buzzer (s)', 'number', 'min="0" step="1"')}
       ${campo('acao_automatica', 'Ação automática', 'text', 'maxlength="100" list="acoes"')}

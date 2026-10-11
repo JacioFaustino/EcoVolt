@@ -171,7 +171,9 @@ Verifica a conexão com o banco.
 GET /api/salas
 GET /api/salas/:id/consumo-hora
 ```
-A primeira lista as salas com a última leitura disponível. A segunda agrupa o consumo por hora.
+A primeira lista as salas com dispositivo e sensor de corrente, com a última leitura disponível e os campos `status_operacao`, `capacidade_max_W`, `horario_inicio`, `horario_fim`, `dias_funcionamento`, `estado_porta` (último estado registrado do sensor de porta), `consumo_dia_kWh`, `consumo_mes_kWh`, `pico_potencia_W` (dia e mês correntes, em UTC) e `alertas_abertos`.
+
+A segunda agrupa o consumo por hora (UTC) e aceita, opcionalmente, `data_inicio` e `data_fim` no formato `YYYY-MM-DD` (dias inclusivos). Sem esses parâmetros, soma todo o histórico.
 ### Dispositivos
 ```http
 GET /api/dispositivos
@@ -253,6 +255,8 @@ status
 gravidade
 tipo_alerta
 id_sala
+data_inicio
+data_fim
 ```
 As regras implementadas são:
 ```text

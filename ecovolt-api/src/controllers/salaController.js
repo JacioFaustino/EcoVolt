@@ -27,7 +27,13 @@ async function consumoPorHora(req, res) {
 
   const consumo =
     await salaService.consumoPorHora(
-      idSala
+      idSala,
+      {
+        dataInicio:
+          req.query.data_inicio,
+        dataFim:
+          req.query.data_fim
+      }
     );
 
   return res.json(consumo);

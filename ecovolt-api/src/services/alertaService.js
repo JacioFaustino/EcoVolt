@@ -1,10 +1,25 @@
 const db = require('../models');
 const AppError = require('../utils/AppError');
 
+const {
+  intervaloDoDiaUtc,
+  paraDataUtc
+} = require('../utils/periodo');
+
+const {
+  Op
+} = db.Sequelize;
+
 async function listar(filtros = {}) {
-  const where = {
-    status: filtros.status || 'ABERTO'
-  };
+  const where = {};
+
+  const status =
+    filtros.status || 'ABERTO';
+
+
+  if (status !== 'TODOS') {
+    where.status = status;
+  }
 
   if (filtros.gravidade) {
     where.gravidade =
@@ -30,7 +45,44 @@ async function listar(filtros = {}) {
       );
     }
 
-    where.id_sala = idSala;
+        where.id_sala = idSala;
+  }
+
+  const inicio = filtros.data_inicio
+    ? paraDataUtc(
+        filtros.data_inicio,
+        'data_inicio'
+      )
+    : null;
+
+  const fim = filtros.data_fim
+    ? paraDataUtc(
+        filtros.data_fim,
+        'data_fim'
+      )
+    : null;
+
+  if (inicio && fim && fim < inicio) {
+    throw new AppError(
+      'data_fim não pode ser anterior a data_inicio',
+      400
+    );
+  }
+
+  const periodo = {};
+
+  if (inicio) {
+    periodo[Op.gte] =
+      intervaloDoDiaUtc(inicio).inicio;
+  }
+
+  if (fim) {
+    periodo[Op.lt] =
+      intervaloDoDiaUtc(fim).fim;
+  }
+
+  if (Object.keys(periodo).length > 0) {
+    where.timestamp_inicio = periodo;
   }
 
   return db.Alerta.findAll({
