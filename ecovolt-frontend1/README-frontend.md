@@ -115,3 +115,53 @@ A API já entrega os campos e filtros que estavam pendentes, inclusive `sensores
 | Banner de status | A API agora envia `status_operacao` em `GET /api/salas`; o aviso "status indisponível" só deve aparecer quando o campo não vier. |
 
 Já ajustado: `maxlength` da unidade em `app.js` (20 caracteres, igual ao schema da API).
+
+## Configuração de alertas: comportamento esperado da tela
+
+O formulário de configuração mostra hoje os mesmos campos para todas as regras. No back-end, vários campos **não têm efeito** em determinadas regras (o valor é salvo, mas nunca influencia o alerta), e o buzzer existe **somente na R3A**. Esconder ou desabilitar esses campos evita que o usuário configure algo que nunca vai acontecer.
+
+### 1) Buzzer: somente na R3A_PORTA_ABERTA
+
+`acionar_buzzer` e `duracao_buzzer_segundos` só têm efeito na regra **R3A_PORTA_ABERTA** — é ela que liga o buzzer enquanto a porta está aberta e o consumo está acima do limite.
+
+- **R3B_PORTA_ABERTA_PERSISTENTE:** não exibir as opções de buzzer. Quando a R3B dispara, quem desliga o buzzer é o back-end, automaticamente (comparação R3A × R3B); não existe campo para isso.
+- **R1, R2, R4, R5, R6, R7 e R8:** não exibir as opções de buzzer. Ao criar ou editar uma configuração dessas, enviar `acionar_buzzer: false` e `duracao_buzzer_segundos: 0`.
+
+> Para quem mexer no back-end: tecnicamente a API emitiria o comando se `acionar_buzzer` viesse `true` nessas regras, mas o buzzer do projeto é exclusivo da porta aberta — por isso o front não deve oferecer a opção.
+
+### 2) Campos sem efeito por regra (ocultar no formulário)
+
+| Regra | Não exibir | Continuam valendo |
+|---|---|---|
+| R1_CONSUMO_FORA_HORARIO | buzzer | limite (W), unidade, persistência |
+| R2_AR_FORA_HORARIO | buzzer | limite (W), unidade, persistência |
+| R3A_PORTA_ABERTA | — (usa tudo) | limite (W), unidade, persistência, buzzer |
+| R3B_PORTA_ABERTA_PERSISTENTE | buzzer | limite (W), unidade, persistência |
+| R4_SOBRECARGA | limite, unidade e buzzer | persistência |
+| R5_PADRAO_HISTORICO | persistência e buzzer | limite (nº de desvios), unidade |
+| R6_LIMITE_DIARIO | persistência e buzzer | limite (kWh do dia), unidade |
+| R7_DISPOSITIVO_OFFLINE | persistência e buzzer | limite (nº de intervalos), unidade |
+| R8_FALHA_LEITURA | buzzer | limite (% mínimo), unidade, persistência |
+
+Na **R4**, em vez do campo de limite, exibir uma observação somente leitura, por exemplo: "A R4 usa a capacidade elétrica cadastrada na sala."
+
+Na **lista** de configurações, exibir "—" nos campos que a regra não usa (hoje ela mostra valores que não têm efeito, o que confunde).
+
+### 3) O que cada "limite" significa (evita unidade errada)
+
+| Regra | `valor_limite` representa | Unidade sugerida |
+|---|---|---|
+| R1, R2, R3A, R3B | potência (W) a partir da qual o ar-condicionado é considerado ligado | `W` |
+| R4 | não é usado (vem da capacidade da sala) | — |
+| R5 | quantos desvios padrão acima da média histórica | `DESVIOS_PADRAO` |
+| R6 | consumo máximo do dia | `kWh` |
+| R7 | quantos intervalos de envio sem contato indicam offline | `INTERVALOS` |
+| R8 | qualidade mínima aceitável do sinal | `%` |
+
+### 4) R3A e R3B são um par
+
+As duas precisam existir e estar ativas: a R3A liga o buzzer; a R3B registra o alerta persistente se a porta continuar aberta depois de `tempo_persistencia_segundos` da R3A **+** o tempo da própria R3B. A tela não deve tratar as duas como regras independentes (não sugerir cadastrar ou desativar só uma).
+
+### 5) `acao_automatica`: não prometer o que não existe
+
+O campo é salvo, mas **nenhuma ação é executada** pela API hoje — não há sistema de notificação/e-mail implementado, então opções como "Notificar administrador" não acontecem de fato. Remover o campo do formulário (e exibir "—" na lista) ou, se a equipe preferir mantê-lo como anotação, deixar explícito que é informativo e ainda não executado.
