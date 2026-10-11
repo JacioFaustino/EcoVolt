@@ -21,7 +21,7 @@ Fornecer à gestão do campus informações sobre o consumo de energia de cada a
 - Detecção de anomalias com regras configuráveis
 - Alerta sonoro local (buzzer) quando a porta permanece aberta com o ar-condicionado ligado
 - Alertas na plataforma para administradores e técnicos
-- Histórico de calibração dos sensores
+- Histórico de calibração dos sensores(planejamento futuro/ainda não implementado)
 - Geração de relatórios de consumo
 
 ---
@@ -106,7 +106,7 @@ A API ficará disponível em `http://localhost:3000`.
 
 ### 3. Front-end
 
-Abra o front-end disponível no projeto com a extensão **Live Server**, quando ele estiver configurado.
+Com a API rodando (`npm run dev` no terminal do VS Code), abra no explorador do VS Code a pasta `ecovolt-frontend1`, clique com o botão direito em `login.html` e escolha **Open with Live Server**. O front abre em `http://127.0.0.1:5500/login.html`. A URL da API fica em `ecovolt-frontend1/js/config.js`. Passo a passo completo e solução de problemas em `ecovolt-frontend1/README.md`.
 
 ---
 
