@@ -69,19 +69,19 @@ async function listar(filtros = {}) {
     );
   }
 
-  const periodo = {};
+  if (inicio || fim) {
+    const periodo = {};
 
-  if (inicio) {
-    periodo[Op.gte] =
-      intervaloDoDiaUtc(inicio).inicio;
-  }
+    if (inicio) {
+      periodo[Op.gte] =
+        intervaloDoDiaUtc(inicio).inicio;
+    }
 
-  if (fim) {
-    periodo[Op.lt] =
-      intervaloDoDiaUtc(fim).fim;
-  }
+    if (fim) {
+      periodo[Op.lt] =
+        intervaloDoDiaUtc(fim).fim;
+    }
 
-  if (Object.keys(periodo).length > 0) {
     where.timestamp_inicio = periodo;
   }
 
