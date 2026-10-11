@@ -6,6 +6,8 @@ const {
   gerarHashToken
 } = require('../middleware/deviceAuth');
 
+const PINO_GPIO_BUZZER_PADRAO = 4;
+
 async function listar() {
   return db.Dispositivo.findAll({
     attributes: {
@@ -26,11 +28,34 @@ async function criar(dados) {
 
   try {
     const dispositivo =
-      await db.Dispositivo.create({
-        ...dados,
-        token_hash: tokenHash,
-        status_operacao: 'ONLINE'
-      });
+      await db.sequelize.transaction(
+        async (transacao) => {
+          const novoDispositivo =
+            await db.Dispositivo.create(
+              {
+                ...dados,
+                token_hash: tokenHash,
+                status_operacao: 'ONLINE'
+              },
+              { transaction: transacao }
+            );
+
+          await db.Atuador.create(
+            {
+              id_dispositivo:
+                novoDispositivo.id_dispositivo,
+              tipo_atuador: 'BUZZER',
+              modelo: 'BUZZER_PADRAO',
+              pino_gpio:
+                PINO_GPIO_BUZZER_PADRAO,
+              status: 'ATIVO'
+            },
+            { transaction: transacao }
+          );
+
+          return novoDispositivo;
+        }
+      );
 
     return {
       dispositivo: {

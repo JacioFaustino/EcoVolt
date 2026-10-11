@@ -201,6 +201,28 @@ Exemplo:
 }
 ```
 `estado_porta` aceita somente `ABERTA` ou `FECHADA` e é enviado junto com a leitura.
+
+Resposta (201 Created):
+```json
+{
+  "id_leitura": 123,
+  "id_sensor": 1,
+  "corrente_rms_A": 2.5,
+  "tensao_rms_V": 220,
+  "potencia_ativa_W": 850,
+  "fator_potencia": 0.95,
+  "energia_intervalo_kWh": 0.0003,
+  "energia_acumulada_kWh": 10.5,
+  "qualidade_sinal": 100,
+  "timestamp": "2026-09-28T20:00:00.000Z",
+  "comandos": [
+    { "acionar_buzzer": true, "duracao_buzzer_segundos": 300 }
+  ]
+}
+```
+
+O campo `comandos` é o único canal de controle do buzzer físico, já que o dispositivo não possui nenhum endpoint de polling — ele só se comunica com o servidor através do próprio `POST /api/leituras`. Por isso, `comandos` é reenviado em toda leitura, sempre refletindo o estado atual da regra `R3A_PORTA_ABERTA` naquele instante (porta aberta + consumo acima do limite = `true`; caso contrário, `false`). O firmware deve tratar `acionar_buzzer` como o estado desejado no momento (ligado/desligado), não como um evento cumulativo — ou seja, receber `true` várias vezes seguidas não deve somar tempo ao buzzer, e receber `false` deve desligá-lo imediatamente.
+
 Para consultas autenticadas pelo usuário:
 ```http
 GET /api/leituras

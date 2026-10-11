@@ -104,6 +104,17 @@ async function obterEstadoPorta(
   });
 }
 
+async function obterAtuadorAtivo(
+  idDispositivo
+) {
+  return db.Atuador.findOne({
+    where: {
+      id_dispositivo: idDispositivo,
+      status: 'ATIVO'
+    }
+  });
+}
+
 function obterInstanteLeitura(
   leitura
 ) {
@@ -305,7 +316,8 @@ async function verificarR3A({
   leitura,
   contexto,
   estadoPorta,
-  configuracao
+  configuracao,
+  idAtuador
 }) {
   const instante =
     obterInstanteLeitura(leitura);
@@ -325,6 +337,7 @@ async function verificarR3A({
     idSala: contexto.id_sala,
     idConfig: configuracao.id_config,
     idLeitura: leitura.id_leitura,
+    idAtuador,
     tipoAlerta:
       'R3A_PORTA_ABERTA',
     descricao:
@@ -900,13 +913,22 @@ async function verificarLeitura(
     configuracaoR3A &&
     configuracaoR3B
   ) {
+    const atuador =
+      await obterAtuadorAtivo(
+        contexto.id_dispositivo
+      );
+
     const alertaR3A =
       await verificarR3A({
         leitura,
         contexto,
         estadoPorta,
         configuracao:
-          configuracaoR3A
+          configuracaoR3A,
+        idAtuador:
+          atuador
+            ? atuador.id_atuador
+            : null
       });
 
     const alertaR3B =
