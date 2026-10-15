@@ -15,6 +15,11 @@
   <p id="msg" class="erro" role="alert"></p>
   <button class="pri">Entrar</button>
 </form>
+<script>
+  if (location.hostname.endsWith('netlify.app')) {
+    window.ECOVOLT_API_URL = 'https://ecovolt-kxp9.onrender.com';
+  }
+</script>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script>
