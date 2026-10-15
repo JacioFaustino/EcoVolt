@@ -7,7 +7,15 @@ module.exports = {
       'token_hash',
       {
         type: Sequelize.STRING(64),
-        allowNull: true,
+        allowNull: true
+      }
+    );
+
+    await queryInterface.addIndex(
+      'dispositivo',
+      ['token_hash'],
+      {
+        name: 'dispositivo_token_hash_unique',
         unique: true
       }
     );
@@ -105,6 +113,11 @@ module.exports = {
     await queryInterface.removeColumn(
       'dispositivo',
       'intervalo_envio_segundos'
+    );
+
+    await queryInterface.removeIndex(
+      'dispositivo',
+      'dispositivo_token_hash_unique'
     );
 
     await queryInterface.removeColumn(
