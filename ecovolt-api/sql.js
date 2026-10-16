@@ -6,6 +6,16 @@
 //   node sql.js --env .env            -> usa o banco LOCAL em vez do TiDB
 //
 // Por padrao le as credenciais de .env.producao (o TiDB).
+//
+// Pra iniciar o banco na rede(tiDb) do servidor, rode:
+// $env:DB_HOST="host-do-tidb"
+// $env:DB_PORT="4000"
+// $env:DB_USER="usuario.root"
+// $env:DB_PASSWORD="senha"
+// $env:DB_NAME="ecovolt"
+// $env:DB_SSL="true"
+// .\node_modules\.bin\sequelize-cli.cmd db:migrate
+// .\node_modules\.bin\sequelize-cli.cmd db:seed --seed 20260927162928-demo-usuario.js
 
 const fs = require('fs');
 const readline = require('readline');

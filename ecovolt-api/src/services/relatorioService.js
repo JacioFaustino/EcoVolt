@@ -1,4 +1,5 @@
 const db = require('../models');
+const { calcularCustoReais } = require('../utils/custo');
 const AppError = require('../utils/AppError');
 
 function obterPeriodo(
@@ -188,7 +189,7 @@ async function criarRelatorio({
         dados.periodo_fim,
       consumo_total_kWh:
         consumoTotal,
-      custo_estimado: null,
+      custo_estimado: calcularCustoReais(consumoTotal),
       picos_consumo:
         JSON.stringify(picos),
       anomalias_detectadas:

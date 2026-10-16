@@ -1,5 +1,6 @@
 const db = require('../models');
 const AppError = require('../utils/AppError');
+const { obterTarifaKwh, calcularCustoReais } = require('../utils/custo');
 
 const {
   intervaloDoDiaUtc,
@@ -187,6 +188,13 @@ async function listar() {
       pico_potencia_W: agregacao
         ? agregacao.pico_potencia_W
         : null,
+      custo_dia_reais: calcularCustoReais(
+        agregacao ? agregacao.consumo_dia_kWh : null
+      ),
+      custo_mes_reais: calcularCustoReais(
+        agregacao ? agregacao.consumo_mes_kWh : null
+      ),
+      tarifa_kwh: obterTarifaKwh(),
       alertas_abertos:
         alertasPorSala.get(
           Number(linha.id_sala)
@@ -274,7 +282,10 @@ async function consumoPorHora(idSala, filtros = {}) {
       replacements
     });
 
-  return linhas;
+  return linhas.map((linha) => ({
+      ...linha,
+      custo_reais: calcularCustoReais(linha.consumo_kWh)
+    }));
 }
 
 module.exports = {

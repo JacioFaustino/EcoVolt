@@ -30,11 +30,43 @@ Fornecer à gestão do campus informações sobre o consumo de energia de cada a
 
 | Camada | Tecnologias |
 |---|---|
-| Hardware | ESP32, sensor de corrente SCT-013, reed switch, buzzer |
+| Hardware | ESP32, sensor de corrente SCT-013, fim de curso, buzzer |
 | Back-end | Node.js, Express |
 | Banco de dados | MySQL |
 | Front-end | HTML5, CSS3, JavaScript, Chart.js |
 | Ferramentas | VS Code, MySQL Workbench, Figma, Git/GitHub |
+
+---
+
+## ☁️ Hospedagem (ambiente publicado)
+
+O sistema está publicado em serviços gratuitos, dividido em três camadas:
+
+| Camada | Serviço | Endereço |
+|---|---|---|
+| Banco de dados | TiDB Cloud Starter (MySQL compatível, região São Paulo) | acesso interno |
+| API | Render | https://ecovolt-kxp9.onrender.com |
+| Front-end | Netlify | https://ecovolt-ifrn.netlify.app |
+
+> A instância gratuita do Render hiberna após 15 minutos sem requisições; a primeira chamada depois disso pode levar cerca de 1 minuto para responder.
+
+### Variáveis de ambiente em produção
+
+Nenhuma credencial é versionada neste repositório. Em produção a API lê as variáveis abaixo, configuradas no painel do Render; para rodar migrations e seeds a partir da sua máquina, usa-se um arquivo `.env.producao` local (ignorado pelo Git):
+
+| Variável | Valor |
+|---|---|
+| `DB_HOST` | host da instância TiDB (ex.: `gateway01.xxx.prod.aws.tidbcloud.com`) |
+| `DB_PORT` | `4000` no TiDB Cloud (no MySQL local é `3306`) |
+| `DB_USER` | usuário do TiDB (termina em `.root`) |
+| `DB_PASSWORD` | senha do TiDB |
+| `DB_NAME` | `ecovolt` |
+| `DB_SSL` | `true` no TiDB Cloud (TLS obrigatório); ausente/`false` no MySQL local |
+| `DB_SSL_CA` | opcional: caminho de um certificado CA, caso seja exigido |
+| `JWT_SECRET` | chave de assinatura do JWT |
+| `NODE_ENV` | `production` |
+
+Os valores são de conhecimento apenas de quem administra o banco, e ficam fora do repositório (arquivo `.env.producao` local e variáveis de ambiente do Render). Para desenvolvimento local continua valendo o `.env` apontando para o MySQL da máquina.
 
 ---
 

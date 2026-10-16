@@ -165,3 +165,86 @@ As duas precisam existir e estar ativas: a R3A liga o buzzer; a R3B registra o a
 ### 5) `acao_automatica`: não prometer o que não existe
 
 O campo é salvo, mas **nenhuma ação é executada** pela API hoje — não há sistema de notificação/e-mail implementado, então opções como "Notificar administrador" não acontecem de fato. Remover o campo do formulário (e exibir "—" na lista) ou, se a equipe preferir mantê-lo como anotação, deixar explícito que é informativo e ainda não executado.
+
+## Custos em R$ (campos novos da API)
+
+> **Divisão de responsabilidade:** o cálculo do custo é do **back-end**. O front só formata e exibe.
+> Isso mantém a regra do projeto (`app.js`): "sem SQL, sem regras de anomalia, sem cálculos de negócio".
+> A tarifa (R$/kWh) é configurada no servidor pela variável de ambiente `TARIFA_KWH` — não existe no front.
+
+### Campos que a API passa a devolver
+
+| Rota | Campo novo | Significado |
+|---|---|---|
+| `GET /api/salas` | `custo_dia_reais` | custo do consumo de hoje (dia UTC) |
+| `GET /api/salas` | `custo_mes_reais` | custo do consumo do mês corrente |
+| `GET /api/salas` | `tarifa_kwh` | tarifa usada no cálculo (para exibir a legenda) |
+| `GET /api/salas/:id/consumo-hora` | `custo_reais` | custo da energia daquela hora |
+| `GET/POST /api/relatorios` | `custo_estimado` | já existia na API; antes vinha sempre `null`, agora é calculado |
+
+Comportamento quando a tarifa **não** está configurada no servidor: os campos vêm `null` (o front mostra `—`, nunca `R$ 0,00`).
+
+### Regras de exibição
+
+- Formatar sempre como `'R$ ' + num(valor, 2)` — o `num` de `js/api.js` já usa o padrão pt-BR (vírgula decimal).
+- Se o campo não vier, mostrar `—` (usar o helper `valido`).
+- Exibir **uma vez por tela** a legenda da tarifa, porque o valor é estimado:
+
+  > Custos estimados com tarifa de R$ 0,95/kWh, sem impostos nem bandeiras tarifárias.
+
+- Nunca recalcular: se precisar de um valor novo (total do dia, custo por hora), pedir o campo à API.
+
+### O que falta fazer no front
+
+| Onde | Ajuste |
+|---|---|
+| `js/app.js` → helper novo | Adicionar `notaTarifa` (código abaixo) e usar nas telas de Visão geral, Salas e detalhe da sala |
+| `js/app.js` → `dashboard()` | Novo card "Custo estimado do dia" (soma de `custo_dia_reais` das salas) |
+| `js/app.js` → `salasPg()` | Nova coluna "Custo do dia" na tabela (entre "Consumo do dia" e "Funcionamento") |
+| `js/app.js` → `salaPg(id)` | Novos cards "Custo diário" e "Custo mensal" na grade do topo |
+| Relatórios | Nada a fazer: o card "Custo estimado" já existe e passa a sair de `—` automaticamente |
+
+Helper a adicionar em `js/app.js`, logo depois do `const dispInfo = ...`:
+
+```js
+  // Legenda da tarifa usada no cálculo de custo (o valor vem da API, não do front).
+  const notaTarifa = ss => {
+    const t = ss.map(s => s.tarifa_kwh).find(valido);
+    return valido(t) ? `<p class="banner">Custos estimados com tarifa de R$ ${num(t, 2)}/kWh, sem impostos nem bandeiras tarifárias.</p>` : '';
+  };
+```
+
+Uso nas telas: acrescentar `${notaTarifa(ss)}` logo depois de `${dispInfo(ss)}` no `main.innerHTML` do dashboard e da lista de salas (no detalhe da sala, `${notaTarifa([s])}`).
+
+Card no dashboard:
+
+```js
+      ${card('Custo estimado do dia', custo.length ? 'R$ ' + num(custo.reduce((a, b) => a + b, 0), 2) : '—')}
+```
+
+(com `const custo = nums('custo_dia_reais');` junto dos outros `nums(...)`)
+
+Coluna na tabela de salas — acrescentar `'Custo do dia'` no cabeçalho, depois de `'Consumo do dia'`, e a célula correspondente:
+
+```js
+          <td>${valido(s.custo_dia_reais) ? 'R$ ' + num(s.custo_dia_reais, 2) : '—'}</td>
+```
+
+Cards no detalhe da sala, depois do card de consumo mensal:
+
+```js
+      ${card('Custo diário', valido(s.custo_dia_reais) ? 'R$ ' + num(s.custo_dia_reais, 2) : '—')}
+      ${card('Custo mensal', valido(s.custo_mes_reais) ? 'R$ ' + num(s.custo_mes_reais, 2) : '—')}
+```
+
+### Como conferir
+
+1. **API** (requer a variável `TARIFA_KWH` no `.env` local ou no painel do Render):
+
+   ```bash
+   curl -H "Authorization: Bearer SEU_JWT" http://localhost:3000/api/salas
+   ```
+
+   Cada sala deve trazer `consumo_dia_kWh`, `custo_dia_reais`, `custo_mes_reais` e `tarifa_kwh`. Sem a variável, os campos de custo vêm `null` — e é esperado que a tela mostre `—` em vez de erro.
+
+2. **Tela:** com tarifa configurada, aparecem a legenda, o card "Custo estimado do dia" e as colunas/cards de custo. Sem tarifa configurada, tudo continua funcionando e mostrando `—`.
