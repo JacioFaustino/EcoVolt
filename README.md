@@ -45,8 +45,9 @@ O sistema está publicado em serviços gratuitos, dividido em três camadas:
 | Camada | Serviço | Endereço |
 |---|---|---|
 | Banco de dados | TiDB Cloud Starter (MySQL compatível, região São Paulo) | acesso interno |
-| API | Render | https://ecovolt-kxp9.onrender.com |
+| API | Render | https://ecovolt-api.onrender.com |
 | Front-end | Netlify | https://ecovolt-ifrn.netlify.app |
+| Front-end | Render | https://ecovolt-api.onrender.com |
 
 > A instância gratuita do Render hiberna após 15 minutos sem requisições; a primeira chamada depois disso pode levar cerca de 1 minuto para responder.
 
