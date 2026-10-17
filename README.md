@@ -47,7 +47,7 @@ O sistema está publicado em serviços gratuitos, dividido em três camadas:
 | Banco de dados | TiDB Cloud Starter (MySQL compatível, região São Paulo) | acesso interno |
 | API | Render | https://ecovolt-api.onrender.com |
 | Front-end | Netlify | https://ecovolt-ifrn.netlify.app |
-| Front-end | Render | https://ecovolt-api.onrender.com |
+| Front-end | Render | https://ecovolt-front.onrender.com |
 
 > A instância gratuita do Render hiberna após 15 minutos sem requisições; a primeira chamada depois disso pode levar cerca de 1 minuto para responder.
 
@@ -65,6 +65,8 @@ Nenhuma credencial é versionada neste repositório. Em produção a API lê as 
 | `DB_SSL` | `true` no TiDB Cloud (TLS obrigatório); ausente/`false` no MySQL local |
 | `DB_SSL_CA` | opcional: caminho de um certificado CA, caso seja exigido |
 | `JWT_SECRET` | chave de assinatura do JWT |
+| `TARIFA_KWH` | valor usado para calcular de kwh para custo em reais|
+| `FATOR_CO2_KG_KWH` | valor usado para calcular a quantidade de CO2 evitado |
 | `NODE_ENV` | `production` |
 
 Os valores são de conhecimento apenas de quem administra o banco, e ficam fora do repositório (arquivo `.env.producao` local e variáveis de ambiente do Render). Para desenvolvimento local continua valendo o `.env` apontando para o MySQL da máquina.

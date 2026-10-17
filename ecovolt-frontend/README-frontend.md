@@ -323,3 +323,67 @@ A listagem agora traz `periodicidade` e `resumo` (JSON em texto). Mostrar a peri
 ```js
 `${PERIODICIDADES[r.periodicidade] || 'Período'}: ${dia(r.periodo_inicio)} a ${dia(r.periodo_fim)}`
 ```
+
+## Sustentabilidade
+
+`GET /api/sustentabilidade` (JWT de usuário)
+
+Parâmetros de query:
+
+| Campo | Obrigatório | Valores |
+|---|---|---|
+| `id_sala` | não | sem ele, agrega todas as salas |
+| `periodicidade` | não | `DIARIO`, `SEMANAL`, `MENSAL`, `ANUAL`, `PERSONALIZADO` (padrão `MENSAL`) |
+| `data_referencia` | não | `YYYY-MM-DD`; usado nas periodicidades de calendário |
+| `periodo_inicio` / `periodo_fim` | só em `PERSONALIZADO` | `YYYY-MM-DD` |
+
+A API devolve o período já calculado. O front **não** calcula datas nem economia.
+
+Campos principais:
+
+- `energia_economizada_kwh`, `custo_evitado_reais`, `co2_nao_emitido_kg`, `reducao_percentual`: os quatro cartões da tela.
+- `desperdicio_kwh`, `taxa_desperdicio_percentual`, `custo_desperdicio_reais`: contexto do período atual.
+- `periodo.parcial`: `true` quando o período ainda está em andamento.
+- `periodo.comparado_inicio` / `comparado_fim`: janela usada na comparação.
+- `comparacao_disponivel`: se `false`, os campos de economia vêm `null`. Mostrar “—” e um aviso; **não** mostrar `0`.
+
+Regras de exibição:
+
+- `energia_economizada_kwh`: `un(valor, 'kWh', 2)`.
+- `custo_evitado_reais`: `valido(valor) ? 'R$ ' + num(valor, 2) : '—'`.
+- `co2_nao_emitido_kg`: `un(valor, 'kg', 3)`.
+- `reducao_percentual`: `num(valor, 1) + ' %'`; se negativo, mostrar em vermelho como “aumento”.
+- Se `!r.comparacao_disponivel`: banner “Ainda não há leituras suficientes no período anterior para calcular a economia.”
+- Se `r.periodo.parcial`: informar “Comparação feita com os mesmos X dias do período anterior.”
+- `id_sala` ausente = todas as salas; incluir a opção “Todas as salas” no select.
+
+Exemplo de chamada:
+
+```js
+const q = new URLSearchParams();
+if (idSala) q.set('id_sala', idSala);
+q.set('periodicidade', periodicidade);
+if (periodicidade === 'PERSONALIZADO') {
+  q.set('periodo_inicio', inicio);
+  q.set('periodo_fim', fim);
+} else if (dataReferencia) {
+  q.set('data_referencia', dataReferencia);
+}
+
+const r = await apiFetch(`/api/sustentabilidade?${q.toString()}`);```
+
+Não usar lista(r): essa rota devolve um objeto, não um array.
+
+Na tela, sugestão de layout: filtro de sala + periodicidade, quatro cartões (`Energia economizada`, `Custo evitado`, `CO₂ não emitido`, `Redução de desperdício`) e uma linha de contexto com `desperdicio_kwh` e `taxa_desperdicio_percentual`.
+
+## Observações
+
+- **Sem histórico, sem número inventado.** Se o período anterior não tiver leituras, a API devolve `null`. Para a demonstração, é preciso ter pelo menos dois períodos com dados (por exemplo, dois dias para `DIARIO`).
+- **A comparação é justa por duração.** Em um mês em andamento, a API compara os mesmos dias do mês anterior (ex.: 1–17/out contra 1–17/set), não o mês inteiro.
+- **O alerta é por sala.** A energia atribuída ao desperdício é a de todas as leituras da sala enquanto o alerta esteve em andamento. Isso está alinhado com o relatório atual.
+- **Consistência com o PDF:** o `relatorioService` conta alerta `FECHADO` com `timestamp_fim` nulo para sempre. Se quiser a mesma regra da tela, acrescente no `EXISTS` de `calcularConsumo`:
+  ```sql
+  AND (
+    a.timestamp_fim IS NOT NULL OR
+    a.status IN ('PENDENTE', 'ABERTO')
+  )
