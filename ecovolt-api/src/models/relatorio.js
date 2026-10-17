@@ -4,12 +4,14 @@ module.exports = (sequelize, DataTypes) => {
     id_sala: DataTypes.INTEGER,
     id_usuario: { type: DataTypes.INTEGER, allowNull: false },
     tipo_relatorio: DataTypes.STRING(30),
+    periodicidade: { type: DataTypes.STRING(20), defaultValue: 'PERSONALIZADO' },
     periodo_inicio: DataTypes.DATEONLY,
     periodo_fim: DataTypes.DATEONLY,
     consumo_total_kWh: DataTypes.DECIMAL(12, 4),
     custo_estimado: DataTypes.DECIMAL(10, 2),
     picos_consumo: DataTypes.TEXT,
     anomalias_detectadas: DataTypes.INTEGER,
+    resumo: DataTypes.TEXT,
     arquivo_path: DataTypes.STRING(255),
     gerado_em: DataTypes.DATE
   }, { tableName: 'relatorio', timestamps: false });

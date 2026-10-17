@@ -248,3 +248,78 @@ Cards no detalhe da sala, depois do card de consumo mensal:
    Cada sala deve trazer `consumo_dia_kWh`, `custo_dia_reais`, `custo_mes_reais` e `tarifa_kwh`. Sem a variável, os campos de custo vêm `null` — e é esperado que a tela mostre `—` em vez de erro.
 
 2. **Tela:** com tarifa configurada, aparecem a legenda, o card "Custo estimado do dia" e as colunas/cards de custo. Sem tarifa configurada, tudo continua funcionando e mostrando `—`.
+
+
+
+
+## Relatórios: periodicidade e PDF
+
+A API passou a aceitar **periodicidade** e a gerar **PDF no servidor**.
+
+### O que mudou no `POST /api/relatorios`
+
+| Campo | Valores | Observação |
+|---|---|---|
+| `periodicidade` | `DIARIO`, `SEMANAL`, `MENSAL`, `ANUAL`, `PERSONALIZADO` | padrão `PERSONALIZADO` |
+| `data_referencia` | `YYYY-MM-DD` | opcional; define o dia/semana/mês/ano. Sem ela, usa hoje |
+| `periodo_inicio` / `periodo_fim` | `YYYY-MM-DD` | obrigatórios **só** quando `PERSONALIZADO` |
+
+Quando a periodicidade não é `PERSONALIZADO`, a API calcula o período e o devolve preenchido na resposta — o front **não** calcula datas.
+
+- Semana = segunda a domingo.
+- Todas as datas são tratadas em UTC (mesma convenção do restante da API).
+
+### PDF
+
+```http
+GET /api/relatorios/:id/pdf
+Authorization: Bearer JWT_DO_USUARIO
+```
+
+Resposta: `application/pdf` com `Content-Disposition: attachment`.
+
+Como o download exige o header `Authorization`, um `<a href>` simples **não funciona**. Use `fetch` + `blob`:
+
+```js
+async function baixarPdf(id) {
+  const resposta = await fetch(`${API_URL}/api/relatorios/${encodeURIComponent(id)}/pdf`, {
+    headers: { Authorization: `Bearer ${Sessao.token()}` }
+  });
+
+  if (!resposta.ok) throw new Error('Não foi possível gerar o PDF.');
+
+  const blob = await resposta.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ecovolt-relatorio-${id}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+```
+
+Botões a acrescentar:
+- na tabela de histórico, ao lado de "Detalhes": `<button data-a="pdf" data-id="...">PDF</button>`;
+- no diálogo de detalhes, junto de "Fechar".
+
+No handler de cliques:
+
+```js
+else if (a === 'pdf') await baixarPdf(b.dataset.id);
+```
+
+### Formulário
+
+Acrescentar um `<select name="periodicidade">` com as cinco opções. Quando `PERSONALIZADO` estiver selecionado, mostrar os campos de data inicial/final (e marcar `required`); nas demais, mostrar apenas `data_referencia` (opcional) e esconder as duas datas.
+
+Ao montar o corpo do POST:
+- `PERSONALIZADO`: enviar `periodicidade`, `periodo_inicio`, `periodo_fim`;
+- demais: enviar `periodicidade` e, se preenchida, `data_referencia`.
+
+### Histórico
+
+A listagem agora traz `periodicidade` e `resumo` (JSON em texto). Mostrar a periodicidade na coluna "Período" ajuda a leitura:
+
+```js
+`${PERIODICIDADES[r.periodicidade] || 'Período'}: ${dia(r.periodo_inicio)} a ${dia(r.periodo_fim)}`
+```

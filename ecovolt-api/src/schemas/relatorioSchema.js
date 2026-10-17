@@ -1,5 +1,9 @@
 const { z } = require('zod');
 
+const { calcularPeriodo } = require('../utils/periodosRelatorio');
+
+const DATA = /^\d{4}-\d{2}-\d{2}$/;
+
 const relatorioSchema = z.object({
   id_sala: z.coerce
     .number()
@@ -12,37 +16,55 @@ const relatorioSchema = z.object({
     'DISPOSITIVOS_OFFLINE'
   ]),
 
-  periodo_inicio: z.string()
-    .regex(
-      /^\d{4}-\d{2}-\d{2}$/,
-      'periodo_inicio deve estar no formato YYYY-MM-DD'
-    ),
+  periodicidade: z
+    .enum([
+      'DIARIO',
+      'SEMANAL',
+      'MENSAL',
+      'ANUAL',
+      'PERSONALIZADO'
+    ])
+    .default('PERSONALIZADO'),
 
-  periodo_fim: z.string()
+  data_referencia: z
+    .string()
     .regex(
-      /^\d{4}-\d{2}-\d{2}$/,
+      DATA,
+      'data_referencia deve estar no formato YYYY-MM-DD'
+    )
+    .optional(),
+
+  periodo_inicio: z
+    .string()
+    .regex(
+      DATA,
+      'periodo_inicio deve estar no formato YYYY-MM-DD'
+    )
+    .optional(),
+
+  periodo_fim: z
+    .string()
+    .regex(
+      DATA,
       'periodo_fim deve estar no formato YYYY-MM-DD'
     )
-}).superRefine((dados, contexto) => {
-  const inicio =
-    new Date(`${dados.periodo_inicio}T00:00:00`);
+    .optional()
+}).strict().superRefine((dados, contexto) => {
+  if (dados.periodicidade !== 'PERSONALIZADO') {
+    return;
+  }
 
-  const fim =
-    new Date(`${dados.periodo_fim}T00:00:00`);
-
-  if (
-    Number.isNaN(inicio.getTime()) ||
-    Number.isNaN(fim.getTime())
-  ) {
+  if (!dados.periodo_inicio || !dados.periodo_fim) {
     contexto.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Período inválido'
+      message:
+        'Para periodicidade PERSONALIZADO informe periodo_inicio e periodo_fim'
     });
 
     return;
   }
 
-  if (fim < inicio) {
+  if (dados.periodo_fim < dados.periodo_inicio) {
     contexto.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['periodo_fim'],
@@ -50,8 +72,21 @@ const relatorioSchema = z.object({
         'periodo_fim não pode ser anterior ao periodo_inicio'
     });
   }
+}).transform((dados) => {
+  if (dados.periodicidade === 'PERSONALIZADO') {
+    return dados;
+  }
+
+  const { inicio, fim } = calcularPeriodo(
+    dados.periodicidade,
+    dados.data_referencia
+  );
+
+  return {
+    ...dados,
+    periodo_inicio: inicio,
+    periodo_fim: fim
+  };
 });
 
-module.exports = {
-  relatorioSchema
-};
+module.exports = { relatorioSchema };
