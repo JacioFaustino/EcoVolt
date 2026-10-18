@@ -16,12 +16,12 @@ Fornecer à gestão do campus informações sobre o consumo de energia de cada a
 ## 🧩 Funcionalidades
 
 - Monitoramento do consumo de energia por sala
-- Dashboard com gráficos de consumo por hora, dia e mês
-- Comparativo e ranking de consumo entre salas
+- Dashboard com indicadores de consumo e custo estimado
+- Detalhes por sala com gráficos de potência recente e consumo por hora
 - Detecção de anomalias com regras configuráveis
 - Alerta sonoro local (buzzer) quando a porta permanece aberta com o ar-condicionado ligado
 - Alertas na plataforma para administradores e técnicos
-- Histórico de calibração dos sensores(planejamento futuro/ainda não implementado)
+- Histórico de calibração dos sensores (planejamento futuro; ainda não implementado)
 - Geração de relatórios de consumo
 
 ---
@@ -141,7 +141,7 @@ A API ficará disponível em `http://localhost:3000`.
 
 ### 3. Front-end
 
-Com a API rodando (`npm run dev` no terminal do VS Code), abra no explorador do VS Code a pasta `ecovolt-frontend1`, clique com o botão direito em `login.html` e escolha **Open with Live Server**. O front abre em `http://127.0.0.1:5500/login.html`. A URL da API fica em `ecovolt-frontend1/js/config.js`. Passo a passo completo e solução de problemas em `ecovolt-frontend1/README.md`.
+Com a API rodando (`npm run dev` no terminal do VS Code), abra a pasta `ecovolt-frontend`, clique com o botão direito em `login.html` e escolha **Open with Live Server**. O front abre em `http://127.0.0.1:5500/login.html`. O arquivo `.vscode/settings.json` configura essa pasta como raiz do Live Server. Em acesso local, a API é `http://localhost:3000`; em hospedagem, as páginas usam `https://ecovolt-api.onrender.com`. O passo a passo e as limitações atuais do painel estão em [ecovolt-frontend/README-frontend.md](ecovolt-frontend/README-frontend.md).
 
 ---
 
@@ -206,7 +206,7 @@ Verifica a conexão com o banco.
 GET /api/salas
 GET /api/salas/:id/consumo-hora
 ```
-A primeira lista as salas com dispositivo e sensor de corrente, com a última leitura disponível e os campos `status_operacao`, `capacidade_max_W`, `horario_inicio`, `horario_fim`, `dias_funcionamento`, `estado_porta` (último estado registrado do sensor de porta), `consumo_dia_kWh`, `consumo_mes_kWh`, `pico_potencia_W` (dia e mês correntes, em UTC), `alertas_abertos` e `sensores` (lista por sala com `nome`, `tipo`, `modelo`, `unidade_medida` e `status`).
+A primeira lista as salas com dispositivo e sensor de corrente, com a última leitura disponível e os campos `status_operacao`, `capacidade_max_W`, `horario_inicio`, `horario_fim`, `dias_funcionamento`, `estado_porta` (último estado registrado do sensor de porta), `consumo_dia_kWh`, `consumo_mes_kWh`, `pico_potencia_W` (dia e mês correntes, em UTC), `custo_dia_reais`, `custo_mes_reais`, `tarifa_kwh`, `alertas_abertos` e `sensores` (lista por sala com `nome`, `tipo`, `modelo`, `unidade_medida` e `status`). Campos de custo dependem de `TARIFA_KWH`; sem tarifa configurada, vêm como `null`.
 
 A segunda agrupa o consumo por hora (UTC) e aceita, opcionalmente, `data_inicio` e `data_fim` no formato `YYYY-MM-DD` (dias inclusivos). Sem esses parâmetros, soma todo o histórico.
 ### Dispositivos
@@ -342,6 +342,7 @@ Exemplo de criação:
 ```http
 GET /api/relatorios
 GET /api/relatorios/:id
+GET /api/relatorios/:id/pdf
 POST /api/relatorios
 ```
 Exemplo de geração:
@@ -349,10 +350,12 @@ Exemplo de geração:
 {
   "id_sala": 3,
   "tipo_relatorio": "CONSUMO",
+  "periodicidade": "PERSONALIZADO",
   "periodo_inicio": "2026-10-01",
   "periodo_fim": "2026-10-06"
 }
 ```
+`periodicidade` aceita `DIARIO`, `SEMANAL`, `MENSAL`, `ANUAL` ou `PERSONALIZADO` (padrão). Para períodos de calendário, envie `data_referencia` opcionalmente; a API calcula `periodo_inicio` e `periodo_fim`. Para `PERSONALIZADO`, as duas datas são obrigatórias. As datas são interpretadas em UTC. O PDF é gerado pela API e seu download exige autenticação de usuário.
 Tipos aceitos:
 ```text
 CONSUMO
