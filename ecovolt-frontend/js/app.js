@@ -66,8 +66,14 @@ function iniciar() {
     const falta = campos.filter(([k]) => ss.length && ss.every(s => s[k] == null && s.dispositivo?.[k] == null)).map(([, n]) => n);
     return falta.length ? `<p class="banner">A API ainda não informa: ${falta.join(', ')}. Esses itens aparecem como “—”.</p>` : '';
   }
-  const dispInfo = ss => ss.some(s => s.dispositivo) ? '' :
+  const dispInfo = ss => !ss.length || ss.every(s => statusOp(s)) ? '' :
     '<p class="banner">Status dos dispositivos indisponível para o seu perfil (a API só libera para administrador e técnico). Exibindo “Desconhecido”.</p>';
+  const notaTarifa = ss => {
+    const tarifa = ss.map(s => s.tarifa_kwh).find(valido);
+    return valido(tarifa)
+      ? `<p class="banner">Custos estimados com tarifa de R$ ${num(tarifa, 2)}/kWh, sem impostos nem bandeiras tarifárias.</p>`
+      : '';
+  };
 
   // ---------- Tabelas ----------
   const tabAlertas = (al, ss, encerrar = false) => tabela(
@@ -128,17 +134,19 @@ function iniciar() {
     const conhecido = ss.some(s => statusOp(s));
     const pot = nums('potencia_ativa_W'), pico = nums('pico_potencia_W');
     const consumo = nums('consumo_dia_kWh');
+    const custos = nums('custo_dia_reais');
     // Qualidade do sinal: usa a leitura mais recente de cada sala (a lista vem do mais novo para o mais antigo).
     const ultima = {}; (leit || []).forEach(l => { if (!(l.id_sala in ultima)) ultima[l.id_sala] = l; });
     const ql = Object.values(ultima).map(l => l.qualidade_sinal).filter(valido).map(Number);
     const maior = (pico.length ? pico : pot);
-    main.innerHTML = `<h1>Visão geral</h1>${dispInfo(ss)}
+    main.innerHTML = `<h1>Visão geral</h1>${dispInfo(ss)}${notaTarifa(ss)}
       ${avisoLacunas(ss, [['consumo_dia_kWh', 'consumo do dia']])}
       <div class="grade">
       ${card('Total de salas', ss.length)}
       ${card('Salas online', conhecido ? ss.filter(s => statusOp(s) === 'ONLINE').length : '—')}
       ${card('Dispositivos offline', conhecido ? ss.filter(s => statusOp(s) === 'OFFLINE').length : '—')}
       ${card('Consumo do dia', consumo.length ? un(consumo.reduce((a, b) => a + b, 0), 'kWh', 2) : '—')}
+      ${card('Custo estimado do dia', ss.length && custos.length === ss.length ? 'R$ ' + num(custos.reduce((a, b) => a + b, 0), 2) : '—')}
       ${card('Alertas abertos', ab.length)}
       ${card(pico.length ? 'Maior pico de potência' : 'Maior potência atual', un(maior.length ? Math.max(...maior) : null, 'W'), pico.length ? '' : 'entre as salas, na última leitura')}
       ${card('Qualidade média do sinal', un(ql.length ? ql.reduce((a, b) => a + b, 0) / ql.length : null, '%', 0))}</div>
@@ -147,20 +155,21 @@ function iniciar() {
 
   async function salasPg() {
     const [ss, ab] = await Promise.all([carregarSalas(), apiFetch('/api/alertas?status=ABERTO').then(lista)]);
-    main.innerHTML = `<h1>Salas</h1>${dispInfo(ss)}
+    main.innerHTML = `<h1>Salas</h1>${dispInfo(ss)}${notaTarifa(ss)}
       ${avisoLacunas(ss, [['consumo_dia_kWh', 'consumo do dia'], ['capacidade_max_W', 'capacidade elétrica'], ['horario_inicio', 'horário de funcionamento']])}` +
-      tabela(['Sala', 'Localização', 'Status', 'Potência atual', 'Consumo do dia', 'Funcionamento', 'Capacidade elétrica', 'Alertas abertos'],
+      tabela(['Sala', 'Localização', 'Status', 'Potência atual', 'Consumo do dia', 'Custo do dia', 'Funcionamento', 'Capacidade elétrica', 'Alertas abertos'],
         ss.map(s => `<tr><td><a href="#/salas/${esc(s.id_sala)}">${esc(s.nome)}</a></td><td>${esc(s.localizacao || '—')}</td><td>${stat(statusOp(s))}</td>
-          <td>${un(s.potencia_ativa_W, 'W')}</td><td>${un(s.consumo_dia_kWh, 'kWh', 2)}</td><td>${horario(s)}</td>
+          <td>${un(s.potencia_ativa_W, 'W')}</td><td>${un(s.consumo_dia_kWh, 'kWh', 2)}</td><td>${valido(s.custo_dia_reais) ? 'R$ ' + num(s.custo_dia_reais, 2) : '—'}</td><td>${horario(s)}</td>
           <td>${un(s.capacidade_max_W, 'W', 0)}</td><td>${s.alertas_abertos ?? ab.filter(a => a.id_sala == s.id_sala).length}</td></tr>`),
         'Nenhuma sala com dispositivo cadastrada.');
   }
 
   async function salaPg(id) {
     const q = encodeURIComponent(id);
+    const hojeUtc = new Date().toISOString().slice(0, 10);
     const [ss, horas, leit, al, cf] = await Promise.all([
       carregarSalas(),
-      opcional(apiFetch(`/api/salas/${q}/consumo-hora`)),
+      opcional(apiFetch(`/api/salas/${q}/consumo-hora?data_inicio=${hojeUtc}&data_fim=${hojeUtc}`)),
       opcional(apiFetch(`/api/leituras?id_sala=${q}&limite=100`)),
       opcional(apiFetch(`/api/alertas?id_sala=${q}&status=ABERTO`)),
       opcional(apiFetch(`/api/configuracoes-alertas?id_sala=${q}`))
@@ -168,13 +177,15 @@ function iniciar() {
     const s = ss.find(x => x.id_sala == id);
     if (!s) throw new Error('Sala não encontrada.');
     const d = s.dispositivo, porta = s.estado_porta, sens = s.sensores || d?.sensores || [];
-    main.innerHTML = `<p><a href="#/salas">← Voltar para salas</a></p>
+    main.innerHTML = `<p><a href="#/salas">← Voltar para salas</a></p>${notaTarifa([s])}
       <h1>${esc(s.nome)} ${stat(statusOp(s))}</h1><p class="mut">${esc(s.localizacao || '')} · Funcionamento: ${horario(s)}</p>
       ${avisoLacunas([s], [['consumo_dia_kWh', 'consumo diário'], ['consumo_mes_kWh', 'consumo mensal'], ['estado_porta', 'estado da porta'], ['capacidade_max_W', 'capacidade elétrica']])}
       <div class="grade">
       ${card('Potência atual', un(s.potencia_ativa_W, 'W'), s.timestamp ? `em ${dataHora(s.timestamp)}` : '')}
       ${card('Consumo diário', un(s.consumo_dia_kWh, 'kWh', 2))}
       ${card('Consumo mensal', un(s.consumo_mes_kWh, 'kWh', 2))}
+      ${card('Custo diário', valido(s.custo_dia_reais) ? 'R$ ' + num(s.custo_dia_reais, 2) : '—')}
+      ${card('Custo mensal', valido(s.custo_mes_reais) ? 'R$ ' + num(s.custo_mes_reais, 2) : '—')}
       ${card('Capacidade elétrica', un(s.capacidade_max_W, 'W', 0))}
       ${card('Porta', porta === 'ABERTA' ? tag('Aberta', 'er') : porta === 'FECHADA' ? tag('Fechada', 'on') : '<span class="mut">Não informado</span>')}</div>
       <div class="duas"><div class="graf"><canvas id="gp"></canvas></div><div class="graf"><canvas id="ge"></canvas></div></div>
@@ -188,10 +199,10 @@ function iniciar() {
     const l = lista(leit).slice().reverse();
     graf('gp', 'line', l.map(x => new Date(x.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })),
       l.map(x => Number(x.potencia_ativa_W)), 'Potência ativa (últimas leituras)', 'Potência (W)');
-    // A API agrupa por hora do dia somando TODO o histórico (não só hoje) e a hora vem em UTC.
+    // A API agrupa por hora do dia no dia UTC solicitado.
     const h = horas || [];
     graf('ge', 'bar', h.map(x => `${String(x.hora).padStart(2, '0')}h`), h.map(x => Number(x.consumo_kWh)),
-      'Energia por hora do dia (histórico)', 'Energia (kWh)', 'Hora do dia (UTC)');
+      'Consumo de hoje por hora (UTC)', 'Energia (kWh)', 'Hora do dia (UTC)');
   }
 
   async function alertasPg() {
@@ -200,7 +211,7 @@ function iniciar() {
     main.innerHTML = `<h1>Alertas</h1><form id="fal" class="filtros">
       <label>Sala<select name="id_sala"><option value="">Todas</option>${opcoes(ss)}</select></label>
       <label>Gravidade<select name="gravidade"><option value="">Todas</option><option value="BAIXA">Baixa</option><option value="MEDIA">Média</option><option value="ALTA">Alta</option></select></label>
-      <label>Status<select name="status"><option value="ABERTO">Aberto</option><option value="PENDENTE">Pendente</option><option value="FECHADO">Fechado</option></select></label>
+      <label>Status<select name="status"><option value="ABERTO">Aberto</option><option value="PENDENTE">Pendente</option><option value="FECHADO">Fechado</option><option value="TODOS">Todos</option></select></label>
       <label>Tipo<select name="tipo_alerta"><option value="">Todos</option>${Object.entries(NOMES).map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</select></label>
       <label>De<input type="date" name="data_inicio" ${per}></label><label>Até<input type="date" name="data_fim" ${per}></label>
       <button class="pri">Filtrar</button></form>
@@ -224,7 +235,7 @@ function iniciar() {
       ${ed ? '' : '<p class="banner">Somente administradores podem criar ou alterar configurações.</p>'}${tabCfg(cfgs, salasG, ed)}`;
   }
 
-  // Unidade sugerida por regra (conforme os dados de exemplo da API). O limite de 10 caracteres vem do schema da API.
+  // Unidade sugerida por regra (conforme os dados de exemplo da API).
   const UNID_SUGERIDA = { R1_CONSUMO_FORA_HORARIO: 'W', R2_AR_FORA_HORARIO: 'W', R3A_PORTA_ABERTA: 'W', R3B_PORTA_ABERTA_PERSISTENTE: 'W', R4_SOBRECARGA: 'W', R5_PADRAO_HISTORICO: 'DESVIOS', R6_LIMITE_DIARIO: 'kWh', R7_DISPOSITIVO_OFFLINE: 'INTERVALOS', R8_FALHA_LEITURA: '%' };
 
   function abrirCfg(c) {
@@ -254,27 +265,59 @@ function iniciar() {
     main.innerHTML = `<h1>Relatórios</h1><form id="frel" class="filtros">
       <label>Sala<select name="id_sala" required>${opcoes(ss)}</select></label>
       <label>Tipo<select name="tipo_relatorio">${Object.entries(TIPOS_REL).map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</select></label>
-      <label>Data inicial<input type="date" name="periodo_inicio" required></label><label>Data final<input type="date" name="periodo_fim" required></label>
+      <label>Periodicidade<select name="periodicidade"><option value="PERSONALIZADO">Personalizado</option><option value="DIARIO">Diário</option><option value="SEMANAL">Semanal</option><option value="MENSAL">Mensal</option><option value="ANUAL">Anual</option></select></label>
+      <label id="data-referencia-wrap" hidden>Data de referência<input type="date" name="data_referencia"></label>
+      <label id="periodo-inicio-wrap">Data inicial<input type="date" name="periodo_inicio" required></label><label id="periodo-fim-wrap">Data final<input type="date" name="periodo_fim" required></label>
       <button class="pri">Gerar relatório</button></form><h2>Histórico</h2>` +
-      tabela(['Sala', 'Tipo', 'Período', 'Consumo total', 'Custo estimado', 'Maior pico', 'Anomalias', 'Gerado em', ''],
+      tabela(['Sala', 'Tipo', 'Periodicidade / período', 'Consumo total', 'Custo estimado', 'Maior pico', 'Anomalias', 'Gerado em', ''],
         rels.map(r => { const p = picos(r)[0]; return `<tr><td>${esc(r.Sala?.nome || nomeSala(ss, r.id_sala))}</td><td>${esc(TIPOS_REL[r.tipo_relatorio] || r.tipo_relatorio)}</td>
-          <td>${dia(r.periodo_inicio)} a ${dia(r.periodo_fim)}</td><td>${un(r.consumo_total_kWh, 'kWh', 2)}</td>
+          <td>${esc(PERIODICIDADES[r.periodicidade] || 'Personalizado')}: ${dia(r.periodo_inicio)} a ${dia(r.periodo_fim)}</td><td>${un(r.consumo_total_kWh, 'kWh', 2)}</td>
           <td>${valido(r.custo_estimado) ? 'R$ ' + num(r.custo_estimado, 2) : '—'}</td>
           <td>${p ? un(p.potencia_maxima_W, 'W') : '—'}</td><td>${esc(r.anomalias_detectadas ?? '—')}</td><td>${dataHora(r.gerado_em)}</td>
-          <td><button data-a="relatorio" data-id="${esc(r.id_relatorio)}">Detalhes</button></td></tr>`; }),
+          <td><button data-a="relatorio" data-id="${esc(r.id_relatorio)}">Detalhes</button> <button data-a="pdf" data-id="${esc(r.id_relatorio)}">PDF</button></td></tr>`; }),
         'Nenhum relatório gerado ainda.');
+    const f = $('#frel');
+    const atualizarPeriodo = () => {
+      const personalizado = f.periodicidade.value === 'PERSONALIZADO';
+      $('#periodo-inicio-wrap').hidden = !personalizado;
+      $('#periodo-fim-wrap').hidden = !personalizado;
+      $('#data-referencia-wrap').hidden = personalizado;
+      f.periodo_inicio.required = personalizado;
+      f.periodo_fim.required = personalizado;
+    };
+    f.periodicidade.addEventListener('change', atualizarPeriodo);
+    atualizarPeriodo();
   }
   const TIPOS_REL = { CONSUMO: 'Consumo', ALERTAS: 'Alertas', DISPOSITIVOS_OFFLINE: 'Dispositivos offline' };
+  const PERIODICIDADES = { DIARIO: 'Diário', SEMANAL: 'Semanal', MENSAL: 'Mensal', ANUAL: 'Anual', PERSONALIZADO: 'Personalizado' };
   // picos_consumo chega como texto JSON: [{ hora, potencia_maxima_W }]
   const picos = r => { try { const p = JSON.parse(r.picos_consumo); return Array.isArray(p) ? p : []; } catch { return []; } };
   function detalheRel(r, ss) {
     const p = picos(r);
     $('#dlgc').innerHTML = `<div class="detalhe"><h2>Relatório de ${esc(TIPOS_REL[r.tipo_relatorio] || r.tipo_relatorio)}</h2>
-      <p>${esc(r.Sala?.nome || nomeSala(ss, r.id_sala))} · ${dia(r.periodo_inicio)} a ${dia(r.periodo_fim)} · gerado em ${dataHora(r.gerado_em)}</p>
+      <p>${esc(r.Sala?.nome || nomeSala(ss, r.id_sala))} · ${esc(PERIODICIDADES[r.periodicidade] || 'Personalizado')}: ${dia(r.periodo_inicio)} a ${dia(r.periodo_fim)} · gerado em ${dataHora(r.gerado_em)}</p>
       <div class="grade">${card('Consumo total', un(r.consumo_total_kWh, 'kWh', 2))}${card('Anomalias encontradas', esc(r.anomalias_detectadas ?? '—'))}${card('Custo estimado', valido(r.custo_estimado) ? 'R$ ' + num(r.custo_estimado, 2) : '—')}</div>
       <h3>Picos de consumo</h3>${tabela(['Hora (UTC)', 'Potência máxima'], p.map(x => `<tr><td>${esc(String(x.hora).slice(8, 10))}/${esc(String(x.hora).slice(5, 7))} ${esc(String(x.hora).slice(11, 16))}</td><td>${un(x.potencia_maxima_W, 'W')}</td></tr>`), 'Nenhum pico registrado no período.')}
-      <div class="acoes"><button data-a="fechar">Fechar</button></div></div>`;
+      <div class="acoes"><button data-a="pdf" data-id="${esc(r.id_relatorio)}">Baixar PDF</button><button data-a="fechar">Fechar</button></div></div>`;
     $('#dlg').showModal();
+  }
+
+  async function baixarPdf(id) {
+    const resposta = await fetch(`${API_URL}/api/relatorios/${encodeURIComponent(id)}/pdf`, {
+      headers: { Authorization: `Bearer ${Sessao.token()}` }
+    });
+    if (resposta.status === 401) {
+      Sessao.limpar();
+      location.href = 'login.html';
+      throw new Error('Sessão expirada');
+    }
+    if (!resposta.ok) throw new Error('Não foi possível baixar o PDF do relatório.');
+    const url = URL.createObjectURL(await resposta.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ecovolt-relatorio-${id}.pdf`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   // ---------- Eventos ----------
@@ -294,7 +337,7 @@ function iniciar() {
         aviso('Alerta encerrado.', 'ok'); await carregarAlertas();
       } else if (a === 'relatorio') {
         detalheRel(await apiFetch(`/api/relatorios/${encodeURIComponent(b.dataset.id)}`), salasG);
-      }
+      } else if (a === 'pdf') await baixarPdf(b.dataset.id);
     } catch (err) { aviso(err.message); }
   });
   document.addEventListener('change', e => { if (e.target.id === 'fsala') { filtroCfg = e.target.value; rotear(); } });
@@ -304,9 +347,19 @@ function iniciar() {
       if (f.id === 'fal') await carregarAlertas();
       else if (f.id === 'fcfg') await salvarCfg(f);
       else if (f.id === 'frel') {
-        const c = Object.fromEntries(new FormData(f)); // só os 4 campos permitidos; o resto o back-end calcula
-        if (c.periodo_inicio > c.periodo_fim) return aviso('A data inicial não pode ser posterior à final.');
-        const r = await apiFetch('/api/relatorios', { method: 'POST', body: JSON.stringify({ ...c, id_sala: Number(c.id_sala) }) });
+        const c = {
+          id_sala: Number(f.id_sala.value),
+          tipo_relatorio: f.tipo_relatorio.value,
+          periodicidade: f.periodicidade.value
+        };
+        if (c.periodicidade === 'PERSONALIZADO') {
+          c.periodo_inicio = f.periodo_inicio.value;
+          c.periodo_fim = f.periodo_fim.value;
+          if (c.periodo_inicio > c.periodo_fim) return aviso('A data inicial não pode ser posterior à final.');
+        } else if (f.data_referencia.value) {
+          c.data_referencia = f.data_referencia.value;
+        }
+        const r = await apiFetch('/api/relatorios', { method: 'POST', body: JSON.stringify(c) });
         aviso('Relatório gerado.', 'ok'); await relPg(); detalheRel(r, salasG);
       }
     } catch (err) { aviso(err.message); }
