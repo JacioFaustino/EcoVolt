@@ -62,6 +62,8 @@ js/vendor/        Chart.js local
 
 Atualizado em 19/10/2026, depois de a API receber `GET /api/sustentabilidade`, PDF e periodicidade nos relatórios.
 
+Do lado da API, as pendências foram encerradas: o `resumo` do relatório e a sustentabilidade agora usam a mesma regra de desperdício, e os erros de validação da sustentabilidade retornam a mensagem específica do campo. Tudo o que está abaixo depende só do front-end.
+
 ### Alta prioridade
 
 #### 1) Página de sustentabilidade (não implementada)
@@ -381,28 +383,11 @@ E remover os dois `<script>` inline.
 
 Desabilitar o botão enquanto baixa evita dois downloads por duplo clique.
 
-#### 8) `GET /api/sustentabilidade` devolve erro genérico
 
-A API responde `400` com "Parâmetros de sustentabilidade inválidos" sem dizer qual campo. O front não tem como orientar o usuário. Melhorar no back-end.
-
-#### 9) Histórico de relatórios sem coluna de desperdício
+#### 8) Histórico de relatórios sem coluna de desperdício
 
 O `resumo` já traz `desperdicio_kWh`. Uma coluna a mais ajuda a leitura.
 
-### Dados para testar a tela
-
-O seed não gera histórico suficiente. Para a apresentação, o back-end tem:
-
-```bash
-cd ecovolt-api
-node --env-file=.env.producao scripts/demo-sustentabilidade.js
-```
-
-Cria uma **Sala Demonstração** com dois meses de leituras e 13 alertas `R3A`, produzindo números reais de economia. Remover depois:
-
-```bash
-node --env-file=.env.producao scripts/demo-sustentabilidade.js --remover
-```
 
 ### Checklist
 
