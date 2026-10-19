@@ -22,7 +22,8 @@ Fornecer à gestão do campus informações sobre o consumo de energia de cada a
 - Alerta sonoro local (buzzer) quando a porta permanece aberta com o ar-condicionado ligado
 - Alertas na plataforma para administradores e técnicos
 - Histórico de calibração dos sensores (planejamento futuro; ainda não implementado)
-- Geração de relatórios de consumo
+- Geração de relatórios de consumo, alertas e dispositivos offline, com filtro por periodicidade e exportação em PDF
+- Indicadores de sustentabilidade: energia economizada, custo evitado, CO₂ não emitido e redução de desperdício
 
 ---
 
@@ -65,8 +66,8 @@ Nenhuma credencial é versionada neste repositório. Em produção a API lê as 
 | `DB_SSL` | `true` no TiDB Cloud (TLS obrigatório); ausente/`false` no MySQL local |
 | `DB_SSL_CA` | opcional: caminho de um certificado CA, caso seja exigido |
 | `JWT_SECRET` | chave de assinatura do JWT |
-| `TARIFA_KWH` | valor usado para calcular de kwh para custo em reais|
-| `FATOR_CO2_KG_KWH` | valor usado para calcular a quantidade de CO2 evitado |
+| `TARIFA_KWH` | tarifa em R$/kWh usada no cálculo de custo (ex.: `0.95`) |
+| `FATOR_CO2_KG_KWH` | fator de emissão em kgCO₂/kWh; padrão `0.0385` (média anual do SIN, MCTI/SIRENE, ano-base 2023) |
 | `NODE_ENV` | `production` |
 
 Os valores são de conhecimento apenas de quem administra o banco, e ficam fora do repositório (arquivo `.env.producao` local e variáveis de ambiente do Render). Para desenvolvimento local continua valendo o `.env` apontando para o MySQL da máquina.
@@ -194,7 +195,7 @@ Authorization: Bearer TOKEN_DO_DISPOSITIVO
 ```
 O token original é exibido somente durante o cadastro ou a geração de um novo token. O banco armazena somente `token_hash`.
 O `token_hash` nunca deve ser exibido, enviado pelo front-end ou armazenado no firmware. O `mac_address` é apenas a identificação física do dispositivo e não substitui o token.
-## 🔌 Endpoints da API
+## 🔌 Rotas e recursos
 A API utiliza REST e JSON. As rotas protegidas exigem o JWT do usuário, exceto `POST /api/leituras`, que exige o token do dispositivo.
 ### Teste da API
 ```http
@@ -363,6 +364,60 @@ ALERTAS
 DISPOSITIVOS_OFFLINE
 ```
 O usuário autenticado é associado automaticamente. O cliente não deve enviar `id_usuario`, `consumo_total_kWh`, `picos_consumo`, `anomalias_detectadas` ou `gerado_em`, pois esses campos são calculados ou preenchidos pela API.
+
+### Sustentabilidade
+```http
+GET /api/sustentabilidade
+```
+Parâmetros de query:
+
+| Campo | Obrigatório | Valores |
+|---|---|---|
+| `id_sala` | não | sem ele, agrega todas as salas |
+| `periodicidade` | não | `DIARIO`, `SEMANAL`, `MENSAL`, `ANUAL`, `PERSONALIZADO` (padrão `MENSAL`) |
+| `data_referencia` | não | `YYYY-MM-DD` |
+| `periodo_inicio` / `periodo_fim` | só em `PERSONALIZADO` | `YYYY-MM-DD` |
+
+Regras de cálculo:
+
+- **Desperdício**: energia das leituras da sala dentro de um alerta `R1`, `R2`, `R3A` ou `R3B`. Se dois alertas se sobrepõem, a leitura conta uma vez.
+- **Comparação**: período anterior de mesma duração. Um mês em andamento é comparado com os mesmos dias do mês anterior.
+- **Energia economizada**: `max(0, desperdício anterior − desperdício atual)`.
+- **Custo evitado**: energia economizada × `TARIFA_KWH`.
+- **CO₂ não emitido**: energia economizada × `FATOR_CO2_KG_KWH`.
+- Sem leituras em um dos períodos, `comparacao_disponivel` é `false` e os campos de economia vêm `null`.
+
+Exemplo:
+
+```json
+{
+  "id_sala": 1,
+  "sala": "Sala 101",
+  "periodo": {
+    "periodicidade": "MENSAL",
+    "inicio": "2026-10-01",
+    "fim_solicitado": "2026-10-31",
+    "fim_considerado": "2026-10-17",
+    "comparado_inicio": "2026-09-01",
+    "comparado_fim": "2026-09-17",
+    "dias_considerados": 17,
+    "parcial": true
+  },
+  "consumo_kwh": 123.457,
+  "desperdicio_kwh": 18.4,
+  "taxa_desperdicio_percentual": 14.9,
+  "periodo_anterior": { "consumo_kwh": 150, "desperdicio_kwh": 25, "total_leituras": 90 },
+  "comparacao_disponivel": true,
+  "energia_economizada_kwh": 6.6,
+  "reducao_percentual": 26.4,
+  "custo_evitado_reais": 6.27,
+  "co2_nao_emitido_kg": 0.254,
+  "custo_desperdicio_reais": 17.48,
+  "tarifa_kwh": 0.95,
+  "fator_co2_kg_kwh": 0.0385
+}
+```
+
 ## 📡 Códigos HTTP
 | Código | Significado |
 |---|---|

@@ -58,12 +58,366 @@ js/app.js         páginas, gráficos e interações do painel
 js/vendor/        Chart.js local
 ```
 
-## Limitações atuais
+## Pendências do front-end
 
-- O formulário de configurações não oculta campos sem efeito para uma regra específica.
-- A API possui o endpoint de sustentabilidade, mas o painel ainda não tem uma página para ele.
-- O histórico de calibração e as notificações automáticas não estão implementados no painel/API.
-- O seed não cria alertas. Eles surgem com leituras enviadas por um dispositivo autenticado; dispositivos do seed precisam de um token gerado antes do uso.
+Atualizado em 19/10/2026, depois de a API receber `GET /api/sustentabilidade`, PDF e periodicidade nos relatórios.
+
+### Alta prioridade
+
+#### 1) Página de sustentabilidade (não implementada)
+
+A rota existe na API e devolve **um objeto** (não array). Não usar `lista()`.
+
+```http
+GET /api/sustentabilidade
+Authorization: Bearer JWT_DO_USUARIO
+```
+
+| Query | Obrigatório | Valores |
+|---|---|---|
+| `id_sala` | não | sem ele, agrega todas as salas |
+| `periodicidade` | não | `DIARIO`, `SEMANAL`, `MENSAL`, `ANUAL`, `PERSONALIZADO` (padrão `MENSAL`) |
+| `data_referencia` | não | `YYYY-MM-DD`; usado nas periodicidades de calendário |
+| `periodo_inicio` / `periodo_fim` | só em `PERSONALIZADO` | `YYYY-MM-DD` |
+
+Campos da resposta:
+
+- Economia: `energia_economizada_kwh`, `custo_evitado_reais`, `co2_nao_emitido_kg`, `reducao_percentual`.
+- Contexto: `consumo_kwh`, `desperdicio_kwh`, `taxa_desperdicio_percentual`, `custo_desperdicio_reais`.
+- Período: `periodo.inicio`, `periodo.fim_considerado`, `periodo.parcial`, `periodo.comparado_inicio`, `periodo.comparado_fim`, `periodo.dias_considerados`.
+- `comparacao_disponivel: false` → os campos de economia vêm `null`. Exibir `—` e um aviso; **nunca** `0`.
+- `reducao_percentual` pode ser negativo (aumento do desperdício). Sinalizar como aumento, não como economia.
+
+Alterações:
+
+1. Em `index.html`, depois de Relatórios:
+
+```html
+<a href="#/sustentabilidade" data-r="sustentabilidade">Sustentabilidade</a>
+```
+
+2. Em `js/app.js`, no objeto `paginas` de `rotear()`:
+
+```js
+const paginas = { '': dashboard, salas: id && /^\d+$/.test(id) ? () => salaPg(id) : salasPg, alertas: alertasPg, configuracoes: cfgPg, relatorios: relPg, sustentabilidade: sustentabilidadePg };
+```
+
+3. Em `js/app.js`, antes de `rotear()`:
+
+```js
+  async function sustentabilidadePg() {
+    const ss = await apiFetch('/api/salas').then(lista);
+    salasG = ss;
+
+    main.innerHTML = `<h1>Sustentabilidade</h1>
+      <form id="fsust" class="filtros">
+        <label>Sala<select name="id_sala"><option value="">Todas as salas</option>${opcoes(ss)}</select></label>
+        <label>Periodicidade<select name="periodicidade">
+          <option value="MENSAL">Mensal</option>
+          <option value="DIARIO">Diário</option>
+          <option value="SEMANAL">Semanal</option>
+          <option value="ANUAL">Anual</option>
+          <option value="PERSONALIZADO">Personalizado</option>
+        </select></label>
+        <label id="sust-ref">Data de referência<input type="date" name="data_referencia"></label>
+        <label id="sust-ini" hidden>Data inicial<input type="date" name="periodo_inicio"></label>
+        <label id="sust-fim" hidden>Data final<input type="date" name="periodo_fim"></label>
+        <button class="pri">Atualizar</button>
+      </form>
+      <div id="sust-res"></div>`;
+
+    const f = $('#fsust');
+
+    const alternar = () => {
+      const personalizado = f.periodicidade.value === 'PERSONALIZADO';
+      $('#sust-ref').hidden = personalizado;
+      $('#sust-ini').hidden = !personalizado;
+      $('#sust-fim').hidden = !personalizado;
+      f.periodo_inicio.required = personalizado;
+      f.periodo_fim.required = personalizado;
+    };
+
+    f.periodicidade.addEventListener('change', alternar);
+    alternar();
+
+    async function consultar() {
+      const p = new URLSearchParams();
+      const periodo = f.periodicidade.value;
+
+      if (f.id_sala.value) p.set('id_sala', f.id_sala.value);
+      p.set('periodicidade', periodo);
+
+      if (periodo === 'PERSONALIZADO') {
+        if (!f.periodo_inicio.value || !f.periodo_fim.value)
+          return aviso('Informe a data inicial e a data final.');
+        if (f.periodo_inicio.value > f.periodo_fim.value)
+          return aviso('A data inicial não pode ser posterior à final.');
+        p.set('periodo_inicio', f.periodo_inicio.value);
+        p.set('periodo_fim', f.periodo_fim.value);
+      } else if (f.data_referencia.value) {
+        p.set('data_referencia', f.data_referencia.value);
+      }
+
+      $('#sust-res').innerHTML = '<p class="vazio">Carregando…</p>';
+
+      const r = await apiFetch(`/api/sustentabilidade?${p}`);
+
+      if (!r.periodo.fim_considerado) {
+        $('#sust-res').innerHTML = '<p class="banner">Esse período ainda não começou. Não há dados para calcular.</p>';
+        return;
+      }
+
+      const semComparacao = !r.comparacao_disponivel;
+      const eco = (v, u, c) => semComparacao || !valido(v) ? '—' : un(v, u, c);
+      const reais = v => semComparacao || !valido(v) ? '—' : 'R$ ' + num(v, 2);
+      const textoPeriodo = `${dia(r.periodo.inicio)} a ${dia(r.periodo.fim_considerado)}${r.periodo.parcial ? ' (em andamento)' : ''}`;
+      const tarifa = valido(r.tarifa_kwh) ? `R$ ${num(r.tarifa_kwh, 2)}/kWh` : 'não configurada';
+
+      $('#sust-res').innerHTML = `
+        <p class="mut">${esc(r.sala || 'Todas as salas')} · ${esc(textoPeriodo)}</p>
+        ${semComparacao ? '<p class="banner">Ainda não há leituras suficientes no período anterior para calcular a economia. Os cartões de economia aparecem como “—”.</p>' : ''}
+        ${r.periodo.comparado_inicio ? `<p class="banner">Comparação com ${dia(r.periodo.comparado_inicio)} a ${dia(r.periodo.comparado_fim)}, mesma duração (${r.periodo.dias_considerados} dia(s)).</p>` : ''}
+        <div class="grade">
+          ${card('Energia economizada', eco(r.energia_economizada_kwh, 'kWh', 2))}
+          ${card('Custo evitado', reais(r.custo_evitado_reais))}
+          ${card('CO₂ não emitido', eco(r.co2_nao_emitido_kg, 'kg', 3))}
+          ${card('Redução do desperdício', semComparacao || !valido(r.reducao_percentual) ? '—' : `${num(r.reducao_percentual, 1)} %`, valido(r.reducao_percentual) && r.reducao_percentual < 0 ? 'aumento em relação ao período anterior' : '')}
+        </div>
+        <h2>Contexto do período</h2>
+        <div class="grade">
+          ${card('Consumo', un(r.consumo_kwh, 'kWh', 2))}
+          ${card('Desperdício identificado', un(r.desperdicio_kwh, 'kWh', 3))}
+          ${card('Taxa de desperdício', valido(r.taxa_desperdicio_percentual) ? `${num(r.taxa_desperdicio_percentual, 1)} %` : '—')}
+          ${card('Custo do desperdício', valido(r.custo_desperdicio_reais) ? 'R$ ' + num(r.custo_desperdicio_reais, 2) : '—')}
+        </div>
+        <p class="mut">Tarifa: ${tarifa} · Fator de emissão: ${num(r.fator_co2_kg_kwh, 4)} kgCO₂/kWh</p>`;
+    }
+
+    f.addEventListener('submit', async e => {
+      e.preventDefault();
+      try { await consultar(); } catch (err) { aviso(err.message); }
+    });
+
+    await consultar();
+  }
+```
+
+#### 2) O detalhe do relatório ignora o `resumo`
+
+`GET /api/relatorios/:id` devolve `resumo` como texto JSON. Hoje `detalheRel()` usa só `picos_consumo`.
+
+Campos por tipo:
+
+| `tipo_relatorio` | Campos do `resumo` |
+|---|---|
+| `CONSUMO` | `desperdicio_kWh`, `taxa_desperdicio_percentual` |
+| `ALERTAS` | os acima + `por_tipo[]` e `lista[]` (50 mais recentes) |
+| `DISPOSITIVOS_OFFLINE` | os acima + `total`, `minutos_totais`, `minutos_medios`, `lista[]` |
+
+Troque a função `detalheRel` inteira por:
+
+```js
+  function detalheRel(r, ss) {
+    const p = picos(r);
+    let resumo = {};
+    try { resumo = JSON.parse(r.resumo) || {}; } catch { resumo = {}; }
+
+    const desperdicio = [
+      ['Energia desperdiçada', valido(resumo.desperdicio_kWh) ? un(resumo.desperdicio_kWh, 'kWh', 3) : '—'],
+      ['Taxa de desperdício', valido(resumo.taxa_desperdicio_percentual) ? `${num(resumo.taxa_desperdicio_percentual, 1)} %` : '—']
+    ];
+
+    let extra = '';
+
+    if (r.tipo_relatorio === 'ALERTAS') {
+      const porTipo = Array.isArray(resumo.por_tipo) ? resumo.por_tipo : [];
+      const lista = Array.isArray(resumo.lista) ? resumo.lista : [];
+
+      extra += '<h3>Alertas por tipo e gravidade</h3>' + tabela(
+        ['Tipo', 'Gravidade', 'Status', 'Total'],
+        porTipo.map(x => `<tr><td>${esc(nomeRegra(x.tipo_alerta))}</td><td>${esc(x.gravidade || '—')}</td><td>${esc(x.status || '—')}</td><td>${esc(x.total)}</td></tr>`),
+        'Nenhum alerta no período.'
+      );
+
+      if (lista.length) {
+        extra += '<h3>Alertas do período (50 mais recentes)</h3>' + tabela(
+          ['Tipo', 'Início', 'Fim', 'Status', 'Valor'],
+          lista.map(x => `<tr><td>${esc(nomeRegra(x.tipo_alerta))}</td><td>${dataHora(x.timestamp_inicio)}</td><td>${dataHora(x.timestamp_fim)}</td><td>${esc(x.status || '—')}</td><td>${valido(x.valor_detectado) ? num(x.valor_detectado, 2) : '—'}</td></tr>`)
+        );
+      }
+    }
+
+    if (r.tipo_relatorio === 'DISPOSITIVOS_OFFLINE') {
+      const lista = Array.isArray(resumo.lista) ? resumo.lista : [];
+
+      extra += `<h3>Indisponibilidade</h3><div class="grade">
+        ${card('Ocorrências', esc(resumo.total ?? '—'))}
+        ${card('Tempo total', un(resumo.minutos_totais, 'min', 0))}
+        ${card('Tempo médio', un(resumo.minutos_medios, 'min', 0))}</div>`;
+
+      if (lista.length) {
+        extra += tabela(
+          ['Início', 'Fim', 'Duração', 'Status'],
+          lista.map(x => `<tr><td>${dataHora(x.timestamp_inicio)}</td><td>${dataHora(x.timestamp_fim)}</td><td>${un(x.duracao_minutos, 'min', 0)}</td><td>${esc(x.status || '—')}</td></tr>`)
+        );
+      }
+    }
+
+    $('#dlgc').innerHTML = `<div class="detalhe"><h2>Relatório de ${esc(TIPOS_REL[r.tipo_relatorio] || r.tipo_relatorio)}</h2>
+      <p>${esc(r.Sala?.nome || nomeSala(ss, r.id_sala))} · ${esc(PERIODICIDADES[r.periodicidade] || 'Personalizado')}: ${dia(r.periodo_inicio)} a ${dia(r.periodo_fim)} · gerado em ${dataHora(r.gerado_em)}</p>
+      <div class="grade">${card('Consumo total', un(r.consumo_total_kWh, 'kWh', 2))}${card('Anomalias encontradas', esc(r.anomalias_detectadas ?? '—'))}${card('Custo estimado', valido(r.custo_estimado) ? 'R$ ' + num(r.custo_estimado, 2) : '—')}</div>
+      <h3>Resumo de desperdício</h3>${tabela(['Indicador', 'Valor'], desperdicio.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`))}
+      ${extra}
+      <h3>Picos de consumo</h3>${tabela(['Hora (UTC)', 'Potência máxima'], p.map(x => `<tr><td>${esc(String(x.hora).slice(8, 10))}/${esc(String(x.hora).slice(5, 7))} ${esc(String(x.hora).slice(11, 16))}</td><td>${un(x.potencia_maxima_W, 'W')}</td></tr>`), 'Nenhum pico registrado no período.')}
+      <div class="acoes"><button data-a="pdf" data-id="${esc(r.id_relatorio)}">Baixar PDF</button><button data-a="fechar">Fechar</button></div></div>`;
+
+    $('#dlg').showModal();
+  }
+```
+
+#### 3) Download do PDF pode ser cancelado
+
+`URL.revokeObjectURL()` no mesmo tick do `click()` cancela o download no Firefox e no Safari, e o `<a>` não é anexado ao DOM.
+
+Troque `baixarPdf` por:
+
+```js
+  async function baixarPdf(id) {
+    try {
+      const resposta = await fetch(`${API_URL}/api/relatorios/${encodeURIComponent(id)}/pdf`, {
+        headers: { Authorization: `Bearer ${Sessao.token()}` }
+      });
+
+      if (resposta.status === 401) {
+        Sessao.limpar();
+        location.href = 'login.html';
+        return;
+      }
+
+      if (!resposta.ok) {
+        if (resposta.status === 404) throw new Error('Relatório não encontrado.');
+        if (resposta.status === 403) throw new Error('Acesso negado a este relatório.');
+        throw new Error('Não foi possível gerar o PDF do relatório.');
+      }
+
+      const url = URL.createObjectURL(await resposta.blob());
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ecovolt-relatorio-${id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      if (err instanceof TypeError) throw new Error('Não foi possível conectar à API.');
+      throw err;
+    }
+  }
+```
+
+#### 4) `apiFetch` força preflight em GET
+
+Em `js/api.js`, `Content-Type: application/json` em GET faz o navegador enviar um `OPTIONS` antes de cada chamada. Só deve ir quando houver corpo.
+
+Troque:
+
+```js
+const headers = { 'Content-Type': 'application/json', ...(opcoes.headers || {}) };
+```
+
+por:
+
+```js
+const headers = { ...(opcoes.headers || {}) };
+if (opcoes.body != null) headers['Content-Type'] = 'application/json';
+```
+
+### Média prioridade
+
+#### 5) Formulário de relatórios perde os filtros após gerar
+
+Hoje: `await relPg(); detalheRel(r, salasG);` redesenha o formulário vazio. Preserve os valores:
+
+```js
+      else if (f.id === 'frel') {
+        const valores = Object.fromEntries(new FormData(f));
+        const c = { id_sala: Number(valores.id_sala), tipo_relatorio: valores.tipo_relatorio, periodicidade: valores.periodicidade };
+
+        if (c.periodicidade === 'PERSONALIZADO') {
+          c.periodo_inicio = valores.periodo_inicio;
+          c.periodo_fim = valores.periodo_fim;
+          if (c.periodo_inicio > c.periodo_fim) return aviso('A data inicial não pode ser posterior à final.');
+        } else if (valores.data_referencia) {
+          c.data_referencia = valores.data_referencia;
+        }
+
+        const r = await apiFetch('/api/relatorios', { method: 'POST', body: JSON.stringify(c) });
+
+        aviso('Relatório gerado.', 'ok');
+        await relPg();
+
+        const nf = $('#frel');
+        Object.entries(valores).forEach(([k, v]) => { if (nf.elements[k] && v) nf.elements[k].value = v; });
+        nf.periodicidade.dispatchEvent(new Event('change'));
+
+        detalheRel(r, salasG);
+      }
+```
+
+#### 6) Bloco `ehLocal` duplicado
+
+Está igual em `index.html` e `login.html`. Se surgir outro domínio, é fácil esquecer um. Mover para `js/config.js`:
+
+```js
+const ehLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const API_URL = window.ECOVOLT_API_URL || (ehLocal ? 'http://localhost:3000' : 'https://ecovolt-api.onrender.com');
+```
+
+E remover os dois `<script>` inline.
+
+### Baixa prioridade
+
+#### 7) Botão PDF sem estado de carregamento
+
+Desabilitar o botão enquanto baixa evita dois downloads por duplo clique.
+
+#### 8) `GET /api/sustentabilidade` devolve erro genérico
+
+A API responde `400` com "Parâmetros de sustentabilidade inválidos" sem dizer qual campo. O front não tem como orientar o usuário. Melhorar no back-end.
+
+#### 9) Histórico de relatórios sem coluna de desperdício
+
+O `resumo` já traz `desperdicio_kWh`. Uma coluna a mais ajuda a leitura.
+
+### Dados para testar a tela
+
+O seed não gera histórico suficiente. Para a apresentação, o back-end tem:
+
+```bash
+cd ecovolt-api
+node --env-file=.env.producao scripts/demo-sustentabilidade.js
+```
+
+Cria uma **Sala Demonstração** com dois meses de leituras e 13 alertas `R3A`, produzindo números reais de economia. Remover depois:
+
+```bash
+node --env-file=.env.producao scripts/demo-sustentabilidade.js --remover
+```
+
+### Checklist
+
+- [ ] Link "Sustentabilidade" no menu
+- [ ] Rota `#/sustentabilidade`
+- [ ] Função `sustentabilidadePg()`
+- [ ] Filtros sala / periodicidade / data
+- [ ] Quatro cartões de economia
+- [ ] Cartões de contexto
+- [ ] `comparacao_disponivel: false` → `—` + aviso
+- [ ] `reducao_percentual` negativa sinalizada como aumento
+- [ ] `resumo` exibido no detalhe do relatório
+- [ ] `baixarPdf` sem revogar a URL imediatamente
+- [ ] `apiFetch` sem `Content-Type` em GET
+- [ ] Filtros preservados após gerar relatório
 
 ## Solução de problemas
 
