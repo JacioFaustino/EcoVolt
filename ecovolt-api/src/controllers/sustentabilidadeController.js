@@ -14,7 +14,8 @@ async function obter(req, res) {
 
   if (!resultado.success) {
     throw new AppError(
-      'Parâmetros de sustentabilidade inválidos',
+      resultado.error.issues[0]?.message ||
+        'Parâmetros de sustentabilidade inválidos',
       400
     );
   }

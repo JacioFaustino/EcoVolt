@@ -51,6 +51,8 @@ async function calcularConsumo({ idSala, inicio, fim }) {
               )
               AND a.timestamp_inicio <= l.timestamp
               AND (a.timestamp_fim IS NULL OR a.timestamp_fim >= l.timestamp)
+              AND (a.timestamp_fim IS NOT NULL OR a.status IN ('PENDENTE', 'ABERTO')
+              )
           ) THEN l.energia_intervalo_kWh ELSE 0 END
         ), 0) AS desperdicio_total
       FROM leitura l
