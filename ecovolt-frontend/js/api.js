@@ -16,7 +16,8 @@ const Sessao = {
 // ---------- Requisições ----------
 async function apiFetch(caminho, opcoes = {}) {
   const token = Sessao.token();
-  const headers = { 'Content-Type': 'application/json', ...(opcoes.headers || {}) };
+  const headers = { ...(opcoes.headers || {}) };
+  if (opcoes.body != null) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
 
   let resposta;

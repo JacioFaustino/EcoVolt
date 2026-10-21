@@ -42,31 +42,30 @@ Em execução local, o front usa `http://localhost:3000` como API. Em hospedagem
 - **Salas:** lista com consumo/custo diário; o detalhe exibe custos diário e mensal, sensores, alertas, potência das leituras recentes e consumo horário do dia UTC.
 - **Alertas:** filtros de sala, gravidade, tipo, status (incluindo **Todos**) e período. As datas são interpretadas pela API em UTC.
 - **Configuração de alertas:** consulta, criação, edição e ativação/desativação conforme o perfil. Os campos são apresentados em um formulário geral; a tela ainda não adapta os campos às regras individuais. `acao_automatica` é apenas um campo informativo: a API não executa notificações.
-- **Relatórios:** geração por consumo, alertas ou dispositivos offline, com periodicidade diária, semanal, mensal, anual ou personalizada; consulta de detalhes e download do PDF.
+- **Relatórios:** geração por consumo, alertas ou dispositivos offline, com periodicidade diária, semanal, mensal, anual ou personalizada; histórico com consumo, desperdício, custo e pico; detalhes e download do PDF.
+- **Sustentabilidade:** economia de energia, custo evitado, CO₂ não emitido e redução do desperdício, com filtros por sala e periodicidade; exibe o contexto do período e sinaliza períodos sem comparação ou aumento do desperdício.
 
 Custos usam a tarifa configurada no servidor (`TARIFA_KWH`). Quando a API não retorna um valor de custo, o painel exibe `—`; não calcula nem substitui o valor.
 
 ## Estrutura
 
 ```text
-index.html        painel (visão geral, salas, alertas, configurações e relatórios)
+index.html        painel (visão geral, salas, alertas, configurações, relatórios e sustentabilidade)
 login.html        tela de login
 css/style.css     estilos
-js/config.js      configuração da URL e capacidades da API
+js/config.js      configuração da URL da API e capacidades da API
 js/api.js         sessão, requisições autenticadas, erros e formatação
 js/app.js         páginas, gráficos e interações do painel
 js/vendor/        Chart.js local
 ```
 
-## Pendências do front-end
+## Sustentabilidade e relatórios
 
-Atualizado em 19/10/2026, depois de a API receber `GET /api/sustentabilidade`, PDF e periodicidade nos relatórios.
+Do lado da API, as pendências foram encerradas: o `resumo` do relatório e a sustentabilidade agora usam a mesma regra de desperdício, e os erros de validação da sustentabilidade retornam a mensagem específica do campo. A interface exibe os indicadores de sustentabilidade com filtros de sala e período, inclui o resumo completo nos detalhes do relatório e preserva os filtros ao gerar relatórios.
 
-Do lado da API, as pendências foram encerradas: o `resumo` do relatório e a sustentabilidade agora usam a mesma regra de desperdício, e os erros de validação da sustentabilidade retornam a mensagem específica do campo. Tudo o que está abaixo depende só do front-end.
+### Funcionalidades implementadas
 
-### Alta prioridade
-
-#### 1) Página de sustentabilidade (não implementada)
+#### 1) Página de sustentabilidade
 
 A rota existe na API e devolve **um objeto** (não array). Não usar `lista()`.
 
@@ -90,7 +89,7 @@ Campos da resposta:
 - `comparacao_disponivel: false` → os campos de economia vêm `null`. Exibir `—` e um aviso; **nunca** `0`.
 - `reducao_percentual` pode ser negativo (aumento do desperdício). Sinalizar como aumento, não como economia.
 
-Alterações:
+Implementação:
 
 1. Em `index.html`, depois de Relatórios:
 
@@ -204,9 +203,9 @@ const paginas = { '': dashboard, salas: id && /^\d+$/.test(id) ? () => salaPg(id
   }
 ```
 
-#### 2) O detalhe do relatório ignora o `resumo`
+#### 2) O detalhe do relatório exibe o `resumo`
 
-`GET /api/relatorios/:id` devolve `resumo` como texto JSON. Hoje `detalheRel()` usa só `picos_consumo`.
+`GET /api/relatorios/:id` devolve `resumo` como texto JSON. `detalheRel()` apresenta o desperdício e a taxa, além das informações específicas de alertas ou dispositivos offline.
 
 Campos por tipo:
 
@@ -216,7 +215,7 @@ Campos por tipo:
 | `ALERTAS` | os acima + `por_tipo[]` e `lista[]` (50 mais recentes) |
 | `DISPOSITIVOS_OFFLINE` | os acima + `total`, `minutos_totais`, `minutos_medios`, `lista[]` |
 
-Troque a função `detalheRel` inteira por:
+A função `detalheRel` lê esse conteúdo e exibe:
 
 ```js
   function detalheRel(r, ss) {
@@ -277,11 +276,11 @@ Troque a função `detalheRel` inteira por:
   }
 ```
 
-#### 3) Download do PDF pode ser cancelado
+#### 3) Download do PDF confiável
 
-`URL.revokeObjectURL()` no mesmo tick do `click()` cancela o download no Firefox e no Safari, e o `<a>` não é anexado ao DOM.
+Revogar a URL no mesmo tick do `click()` pode cancelar o download no Firefox e no Safari. O link agora é anexado ao DOM e a URL só é revogada após o navegador iniciar o download.
 
-Troque `baixarPdf` por:
+A função `baixarPdf` também trata os erros de autorização e conexão:
 
 ```js
   async function baixarPdf(id) {
@@ -317,28 +316,22 @@ Troque `baixarPdf` por:
   }
 ```
 
-#### 4) `apiFetch` força preflight em GET
+#### 4) `apiFetch` envia `Content-Type` apenas com corpo
 
-Em `js/api.js`, `Content-Type: application/json` em GET faz o navegador enviar um `OPTIONS` antes de cada chamada. Só deve ir quando houver corpo.
+`Content-Type: application/json` em GET pode fazer o navegador enviar um `OPTIONS` antes de cada chamada. O cabeçalho agora é enviado apenas quando há corpo na requisição.
 
-Troque:
-
-```js
-const headers = { 'Content-Type': 'application/json', ...(opcoes.headers || {}) };
-```
-
-por:
+A implementação em `js/api.js` cria os cabeçalhos assim:
 
 ```js
 const headers = { ...(opcoes.headers || {}) };
 if (opcoes.body != null) headers['Content-Type'] = 'application/json';
 ```
 
-### Média prioridade
+### Ajustes de relatórios implementados
 
-#### 5) Formulário de relatórios perde os filtros após gerar
+#### 5) Formulário de relatórios preserva os filtros
 
-Hoje: `await relPg(); detalheRel(r, salasG);` redesenha o formulário vazio. Preserve os valores:
+Depois de gerar o relatório, `relPg()` redesenha a página. Os valores do formulário são restaurados antes de abrir o detalhe:
 
 ```js
       else if (f.id === 'frel') {
@@ -366,9 +359,9 @@ Hoje: `await relPg(); detalheRel(r, salasG);` redesenha o formulário vazio. Pre
       }
 ```
 
-#### 6) Bloco `ehLocal` duplicado
+#### 6) Configuração de ambiente centralizada
 
-Está igual em `index.html` e `login.html`. Se surgir outro domínio, é fácil esquecer um. Mover para `js/config.js`:
+O cálculo de `ehLocal` fica em `js/config.js`, compartilhado pelo login e pelo painel, evitando divergência entre as páginas:
 
 ```js
 const ehLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
@@ -377,32 +370,19 @@ const API_URL = window.ECOVOLT_API_URL || (ehLocal ? 'http://localhost:3000' : '
 
 E remover os dois `<script>` inline.
 
-### Baixa prioridade
+### Melhorias de interface implementadas
 
-#### 7) Botão PDF sem estado de carregamento
+#### 7) Estado de carregamento do botão PDF
 
-Desabilitar o botão enquanto baixa evita dois downloads por duplo clique.
-
-
-#### 8) Histórico de relatórios sem coluna de desperdício
-
-O `resumo` já traz `desperdicio_kWh`. Uma coluna a mais ajuda a leitura.
+O botão fica desabilitado enquanto o arquivo é solicitado, evitando downloads duplicados por duplo clique.
 
 
-### Checklist
+#### 8) Coluna de desperdício no histórico de relatórios
 
-- [ ] Link "Sustentabilidade" no menu
-- [ ] Rota `#/sustentabilidade`
-- [ ] Função `sustentabilidadePg()`
-- [ ] Filtros sala / periodicidade / data
-- [ ] Quatro cartões de economia
-- [ ] Cartões de contexto
-- [ ] `comparacao_disponivel: false` → `—` + aviso
-- [ ] `reducao_percentual` negativa sinalizada como aumento
-- [ ] `resumo` exibido no detalhe do relatório
-- [ ] `baixarPdf` sem revogar a URL imediatamente
-- [ ] `apiFetch` sem `Content-Type` em GET
-- [ ] Filtros preservados após gerar relatório
+O histórico exibe `desperdicio_kWh` do `resumo` junto com os demais indicadores.
+
+
+#Todas as pendências listadas anteriormente foram implementadas: sustentabilidade, detalhes e histórico dos relatórios, download do PDF, cabeçalhos das requisições e preservação dos filtros.
 
 ## Solução de problemas
 
