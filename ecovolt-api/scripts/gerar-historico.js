@@ -397,8 +397,10 @@ function montarPlano(contexto, opcoes) {
     if (evento.carga != null) valor = evento.carga;
     else if (evento.qualidade != null) valor = evento.qualidade;
     else if (evento.tipo === TIPOS.R7) valor = 0;
-    else valor = potenciaEm(new Date((evento.inicio.getTime() + evento.fim.getTime()) / 2));
-
+    else valor = potenciaEm(
+      deBrasilia(new Date((evento.inicio.getTime() + evento.fim.getTime()) / 2))
+    );
+    
     alertas.push({
       id_sala: sala.id_sala,
       id_config: config,
