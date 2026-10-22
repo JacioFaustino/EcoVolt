@@ -1,16 +1,10 @@
 'use strict';
 
-// Gera histórico de leituras, alertas e estados de porta para uma sala
-// já cadastrada, para analisar o painel (dashboard, gráficos, alertas,
-// relatórios e sustentabilidade) antes de o ESP32 coletar de verdade.
-//
-//   node scripts/gerar-historico.js
-//   node scripts/gerar-historico.js --sala 1 --dias 180 --intervalo 5
-//   node scripts/gerar-historico.js --remover --confirmar
-//
-// Tudo em UTC, a mesma convenção da API. Os números são fictícios.
+
 
 require('dotenv').config();
+
+const { paraBrasilia, deBrasilia } = require('../src/utils/fuso');
 
 const DIAS_PADRAO = 120;
 const INTERVALO_PADRAO = 10;
@@ -18,7 +12,7 @@ const LOTE = 500;
 const MINUTO = 60 * 1000;
 const DIA = 24 * 60 * MINUTO;
 
-// Carga média por hora (W) em dia útil. Índice = hora UTC.
+
 const CARGA_DIA_UTIL = [
   90, 90, 90, 90, 90, 90, 90, 800, 1800, 1800, 1800, 1800, 900,
   1800, 1800, 1800, 1800, 1200, 1100, 1100, 1100, 400, 90, 90
@@ -28,8 +22,6 @@ const CARGA_STANDBY = 90;
 const CARGA_PICO = 5400;
 const CARGA_NOTURNA = [620, 900];
 
-// Com a porta aberta o ar não desliga e consome mais: é esse
-// excedente que caracteriza o desperdício.
 const FATOR_PORTA_ABERTA = 1.35;
 const FATOR_DIA_QUENTE = 1.45;
 
@@ -78,7 +70,7 @@ const DESPERDICIO = [
 
 const arredondar = (valor, casas) => Number(Number(valor).toFixed(casas));
 
-// PRNG determinístico (mulberry32): o mesmo --seed gera os mesmos dados.
+
 function criarRandom(seed) {
   let estado = seed >>> 0;
 
@@ -108,16 +100,13 @@ const contem = (evento, instante) =>
   instante.getTime() >= evento.inicio.getTime() &&
   instante.getTime() < evento.fim.getTime();
 
-// ------------------------------------------------------------- eventos
+
 
 function planejarEventos({ inicio, fim, random }) {
   const eventos = [];
   const cursor = new Date(inicio.getTime());
   const duracao = fim.getTime() - inicio.getTime();
 
-  // O desperdício cai ao longo do período, simulando ações de
-  // eficiência energética. É essa melhora que a tela de
-  // sustentabilidade precisa mostrar.
   const progresso = (data) =>
     duracao > 0
       ? Math.min(Math.max((data.getTime() - inicio.getTime()) / duracao, 0), 1)
@@ -142,13 +131,13 @@ function planejarEventos({ inicio, fim, random }) {
     const hora = () => inteiro(random, 0, 11) * 5;
 
     if (util) {
-      // R3A: porta aberta com o ar-condicionado ligado.
+
       if (random() < 0.95 * (1 - 0.85 * andamento)) {
         const r3a = janela(dia, inteiro(random, 8, 20), hora(), inteiro(random, 45, 180));
 
         eventos.push({ tipo: TIPOS.R3A, ...r3a });
 
-        // R3B: continua aberta depois do aviso sonoro.
+
         if (random() < 0.3) {
           eventos.push({
             tipo: TIPOS.R3B,
@@ -158,7 +147,6 @@ function planejarEventos({ inicio, fim, random }) {
         }
       }
 
-      // R4: pico acima da capacidade do circuito.
       if (random() < 0.04) {
         eventos.push({
           tipo: TIPOS.R4,
@@ -167,7 +155,6 @@ function planejarEventos({ inicio, fim, random }) {
         });
       }
 
-      // R7: dispositivo sem contato (a janela fica sem leituras).
       if (random() < 0.03) {
         eventos.push({
           tipo: TIPOS.R7,
@@ -175,7 +162,6 @@ function planejarEventos({ inicio, fim, random }) {
         });
       }
 
-      // R8: qualidade do sinal abaixo do limite.
       if (random() < 0.04) {
         eventos.push({
           tipo: TIPOS.R8,
@@ -184,7 +170,6 @@ function planejarEventos({ inicio, fim, random }) {
         });
       }
 
-      // R5: consumo acima do padrão histórico no mesmo horário.
       if (random() < 0.02) {
         eventos.push({
           tipo: TIPOS.R5,
@@ -193,7 +178,6 @@ function planejarEventos({ inicio, fim, random }) {
       }
     }
 
-    // R1/R2: equipamento ligado fora do horário.
     if (random() < (util ? 0.2 : 0.22) * (1 - 0.7 * andamento)) {
       eventos.push({
         tipo: random() < 0.5 ? TIPOS.R1 : TIPOS.R2,
@@ -205,8 +189,6 @@ function planejarEventos({ inicio, fim, random }) {
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
-  // Descarta o que começa depois do fim da janela (o dia de hoje
-  // ainda está em andamento) e corta o que termina depois.
   const validos = eventos
     .filter((e) => e.inicio < fim && e.fim > inicio)
     .map((e) => ({
@@ -218,8 +200,6 @@ function planejarEventos({ inicio, fim, random }) {
   return garantirEventos(validos, { inicio, fim });
 }
 
-// Garante ao menos uma ocorrência de cada tipo, para nenhum filtro
-// do painel ficar vazio quando o sorteio é econômico.
 function garantirEventos(eventos, { inicio, fim }) {
   const diasJanela = Math.max(1, Math.floor((fim - inicio) / DIA) - 1);
   const base = inicioDoDia(fim);
@@ -268,8 +248,6 @@ function garantirEventos(eventos, { inicio, fim }) {
   if (!tem(TIPOS.R7)) criar(TIPOS.R7, 25, 11, 45);
   if (!tem(TIPOS.R8)) criar(TIPOS.R8, 29, 16, 25, { qualidade: 30 });
 
-  // Um dia mais quente que os outros, em dia útil: garante uma
-  // ocorrência de R6 (limite diário) sem depender do sorteio.
   let diasQuente = Math.min(11, diasJanela);
 
   while (diasQuente > 0 && ehFimDeSemana(new Date(base.getTime() - diasQuente * DIA))) {
@@ -285,8 +263,6 @@ function garantirEventos(eventos, { inicio, fim }) {
 
   return eventos;
 }
-
-// ------------------------------------------------------------ leituras
 
 function gerarLeituras({ inicio, fim, intervaloMin, eventos, random, idSensor }) {
   const passo = intervaloMin * MINUTO;
@@ -334,7 +310,7 @@ function gerarLeituras({ inicio, fim, intervaloMin, eventos, random, idSensor })
       potencia_ativa_W: arredondar(potencia, 2),
       fator_potencia: arredondar(entre(random, 0.92, 0.99), 3),
       energia_intervalo_kWh: arredondar((potencia * intervaloMin) / 60 / 1000, 6),
-      timestamp: instante,
+      timestamp: deBrasilia(instante),
       qualidade_sinal: falha ? falha.qualidade : inteiro(random, 92, 100)
     });
   }
@@ -356,7 +332,7 @@ function gerarEstadosPorta({ inicio, fim, eventos, idSensor }) {
         );
 
         if (instante >= inicio && instante < fim) {
-          estados.push({ id_sensor: idSensor, estado, timestamp: instante });
+          estados.push({ id_sensor: idSensor, estado, timestamp: deBrasilia(instante), });
         }
       }
     }
@@ -366,14 +342,13 @@ function gerarEstadosPorta({ inicio, fim, eventos, idSensor }) {
 
   for (const evento of eventos.filter((e) => e.tipo === TIPOS.R3A)) {
     if (evento.inicio >= inicio && evento.inicio < fim) {
-      estados.push({ id_sensor: idSensor, estado: 'ABERTA', timestamp: evento.inicio });
+      estados.push({ id_sensor: idSensor, estado: 'ABERTA', timestamp: deBrasilia(evento.inicio) });
     }
   }
 
   return estados.sort((a, b) => a.timestamp - b.timestamp);
 }
 
-// --------------------------------------------------------------- plano
 
 function montarPlano(contexto, opcoes) {
   const { sala, sensorCorrente, sensorPorta, configuracoes, agora } = contexto;
@@ -430,18 +405,17 @@ function montarPlano(contexto, opcoes) {
       tipo_alerta: evento.tipo,
       descricao: DESCRICOES[evento.tipo],
       valor_detectado: valor == null ? null : arredondar(valor, 2),
-      timestamp_inicio: evento.inicio,
-      timestamp_fim: evento.fim,
+      timestamp_inicio: deBrasilia(evento.inicio),
+      timestamp_fim: deBrasilia(evento.fim),
       status: 'FECHADO',
       gravidade: GRAVIDADES[evento.tipo]
     });
   }
 
-  // R6: dias acima do limite configurado.
   const porDia = new Map();
 
   for (const leitura of leituras) {
-    const chave = leitura.timestamp.toISOString().slice(0, 10);
+    const chave = paraBrasilia(leitura.timestamp).toISOString().slice(0, 10);
 
     porDia.set(chave, (porDia.get(chave) || 0) + leitura.energia_intervalo_kWh);
   }
@@ -464,8 +438,8 @@ function montarPlano(contexto, opcoes) {
         tipo_alerta: TIPOS.R6,
         descricao: DESCRICOES[TIPOS.R6],
         valor_detectado: arredondar(total, 2),
-        timestamp_inicio: instante,
-        timestamp_fim: instante,
+        timestamp_inicio: deBrasilia(instante),
+        timestamp_fim: deBrasilia(instante),
         status: 'FECHADO',
         gravidade: GRAVIDADES[TIPOS.R6]
       });
@@ -474,10 +448,15 @@ function montarPlano(contexto, opcoes) {
 
   alertas.sort((a, b) => a.timestamp_inicio - b.timestamp_inicio);
 
-  return { inicio, fim, leituras, alertas, estados };
+  return {
+    inicio: deBrasilia(inicio),
+    fim: deBrasilia(fim),
+    leituras,
+    alertas,
+    estados
+  };
 }
 
-// ---------------------------------------------------------------- banco
 
 async function carregarContexto(db, opcoes) {
   const sala = await db.Sala.findByPk(opcoes.salaId);
@@ -520,7 +499,7 @@ async function carregarContexto(db, opcoes) {
     sensorPorta,
     configuracoes,
     limiteDiarioKwh,
-    agora: new Date()
+    agora: paraBrasilia(new Date())
   };
 }
 
@@ -571,7 +550,6 @@ async function remover(db, contexto, plano) {
   };
 }
 
-// Confere o resultado com a mesma regra da tela de sustentabilidade.
 async function resumoDoPeriodo(db, contexto, plano) {
   const lista = DESPERDICIO.map((tipo) => `'${tipo}'`).join(', ');
 
@@ -610,7 +588,6 @@ async function resumoDoPeriodo(db, contexto, plano) {
   };
 }
 
-// ----------------------------------------------------------------- main
 
 function obterArgumento(nome, padrao) {
   const indice = process.argv.indexOf(`--${nome}`);

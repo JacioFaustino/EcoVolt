@@ -1,6 +1,6 @@
 const AppError = require('./AppError');
 const { paraDataUtc } = require('./periodo');
-
+const { hojeBrasilia, meiaNoiteBrasilia } = require('./fuso');
 const MS_DIA = 24 * 60 * 60 * 1000;
 
 function formatar(data) {
@@ -8,15 +8,7 @@ function formatar(data) {
 }
 
 function hojeUtc() {
-  const agora = new Date();
-
-  return new Date(
-    Date.UTC(
-      agora.getUTCFullYear(),
-      agora.getUTCMonth(),
-      agora.getUTCDate()
-    )
-  );
+  return hojeBrasilia();
 }
 
 function calcularPeriodo(periodicidade, dataReferencia) {
@@ -44,8 +36,8 @@ function calcularPeriodo(periodicidade, dataReferencia) {
       const ano = base.getUTCFullYear();
       const mes = base.getUTCMonth();
 
-      inicio = new Date(Date.UTC(ano, mes, 1));
-      fim = new Date(Date.UTC(ano, mes + 1, 0));
+     inicio = meiaNoiteBrasilia(ano, mes, 1);
+      fim = meiaNoiteBrasilia(ano, mes + 1, 0);
 
       break;
     }
@@ -53,8 +45,8 @@ function calcularPeriodo(periodicidade, dataReferencia) {
     case 'ANUAL': {
       const ano = base.getUTCFullYear();
 
-      inicio = new Date(Date.UTC(ano, 0, 1));
-      fim = new Date(Date.UTC(ano, 11, 31));
+      inicio = meiaNoiteBrasilia(ano, 0, 1);
+      fim = meiaNoiteBrasilia(ano, 11, 31);
 
       break;
     }

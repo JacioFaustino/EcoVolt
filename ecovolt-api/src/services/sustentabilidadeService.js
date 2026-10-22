@@ -33,6 +33,8 @@ const LISTA_TIPOS = TIPOS_DESPERDICIO
 const arredondar = (valor, casas) =>
   Number(Number(valor).toFixed(casas));
 
+const { meiaNoiteBrasilia } = require('../utils/fuso');
+
 const formatarData = (data) =>
   data.toISOString().slice(0, 10);
 
@@ -113,22 +115,18 @@ function montarPeriodos({
       break;
 
     case 'MENSAL':
-      inicioComparado = new Date(
-        Date.UTC(
-          inicio.getUTCFullYear(),
-          inicio.getUTCMonth() - 1,
-          1
-        )
+      inicioComparado = meiaNoiteBrasilia(
+        inicio.getUTCFullYear(),
+        inicio.getUTCMonth() - 1,
+        1
       );
       break;
 
     case 'ANUAL':
-      inicioComparado = new Date(
-        Date.UTC(
-          inicio.getUTCFullYear() - 1,
-          0,
-          1
-        )
+      inicioComparado = meiaNoiteBrasilia(
+        inicio.getUTCFullYear() - 1,
+        0,
+        1
       );
       break;
 

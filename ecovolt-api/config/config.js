@@ -6,6 +6,7 @@ const configuracaoBase = {
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT) || 3306,
   dialect: 'mysql',
+  timezone: '+00:00',
   dialectOptions:
     process.env.DB_SSL === 'true'
       ? {

@@ -74,13 +74,13 @@ async function calcularConsumo({ idSala, inicio, fim }) {
 async function calcularPicos({ idSala, inicio, fim }) {
   const [linhas] = await db.sequelize.query(`
       SELECT
-        DATE_FORMAT(l.timestamp, '%Y-%m-%d %H:00:00') AS hora,
+        DATE_FORMAT(CONVERT_TZ(l.timestamp, '+00:00', '-03:00'), '%Y-%m-%d %H:00:00') AS hora,
         MAX(l.potencia_ativa_W) AS potencia_maxima_W
       FROM leitura l
       JOIN sensor se ON se.id_sensor = l.id_sensor
       JOIN dispositivo d ON d.id_dispositivo = se.id_dispositivo
       WHERE d.id_sala = ? AND l.timestamp >= ? AND l.timestamp < ?
-      GROUP BY DATE_FORMAT(l.timestamp, '%Y-%m-%d %H:00:00')
+      GROUP BY DATE_FORMAT(CONVERT_TZ(l.timestamp, '+00:00', '-03:00'), '%Y-%m-%d %H:00:00')
       ORDER BY potencia_maxima_W DESC
       LIMIT 10
     `, {

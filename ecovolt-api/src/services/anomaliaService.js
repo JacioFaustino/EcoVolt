@@ -5,6 +5,8 @@ const {
   processarAlertaPersistente
 } = require('./alertaPersistenciaService');
 
+const { paraBrasilia, deBrasilia, meiaNoiteBrasilia } = require('../utils/fuso');
+
 const DIAS_SEMANA = [
   'DOM',
   'SEG',
@@ -173,8 +175,10 @@ function foraDoHorario(
   data,
   contexto
 ) {
+  const local = paraBrasilia(data);
+
   const diaAtual =
-    DIAS_SEMANA[data.getDay()];
+    DIAS_SEMANA[local.getUTCDay()];
 
   const dias =
     String(
@@ -191,9 +195,9 @@ function foraDoHorario(
   }
 
   const horaAtual =
-    data.getHours() * 3600 +
-    data.getMinutes() * 60 +
-    data.getSeconds();
+    local.getUTCHours() * 3600 +
+    local.getUTCMinutes() * 60 +
+    local.getUTCSeconds();
 
   const inicio =
     horaEmSegundos(
@@ -503,22 +507,20 @@ async function verificarR6({
     return null;
   }
 
-  const inicioDia =
-    new Date(instante);
+  const local =
+    paraBrasilia(instante);
 
-  inicioDia.setUTCHours(
-    0,
-    0,
-    0,
-    0
-  );
+  const inicioDia =
+    meiaNoiteBrasilia(
+      local.getUTCFullYear(),
+      local.getUTCMonth(),
+      local.getUTCDate()
+    );
 
   const fimDia =
-    new Date(inicioDia);
-
-  fimDia.setUTCDate(
-    fimDia.getUTCDate() + 1
-  );
+    new Date(
+      inicioDia.getTime() + 24 * 60 * 60 * 1000
+    );
 
   const inicioDiaSql =
     formatarDataSqlUtc(inicioDia);
@@ -635,14 +637,20 @@ async function verificarR5({
     return null;
   }
 
-  const inicioHora =
-    new Date(instante);
+  const localR5 =
+    paraBrasilia(instante);
 
-  inicioHora.setUTCMinutes(
-    0,
-    0,
-    0
-  );
+  const inicioHora =
+    deBrasilia(
+      new Date(
+        Date.UTC(
+          localR5.getUTCFullYear(),
+          localR5.getUTCMonth(),
+          localR5.getUTCDate(),
+          localR5.getUTCHours()
+        )
+      )
+    );
 
   const fimHora =
     new Date(inicioHora);
@@ -696,10 +704,10 @@ async function verificarR5({
         WHERE d.id_sala = ?
           AND l.timestamp >= ?
           AND l.timestamp < ?
-          AND DAYOFWEEK(l.timestamp) =
-              DAYOFWEEK(?)
-          AND HOUR(l.timestamp) =
-              HOUR(?)
+          AND DAYOFWEEK(CONVERT_TZ(l.timestamp, '+00:00', '-03:00')) =
+              DAYOFWEEK(CONVERT_TZ(?, '+00:00', '-03:00'))
+          AND HOUR(CONVERT_TZ(l.timestamp, '+00:00', '-03:00')) =
+              HOUR(CONVERT_TZ(?, '+00:00', '-03:00'))
         GROUP BY
           DATE_FORMAT(
             l.timestamp,

@@ -263,7 +263,7 @@ async function consumoPorHora(idSala, filtros = {}) {
   const [linhas] =
     await db.sequelize.query(`
       SELECT
-        HOUR(l.timestamp) AS hora,
+        HOUR(CONVERT_TZ(l.timestamp, '+00:00', '-03:00')) AS hora,
         SUM(
           l.energia_intervalo_kWh
         ) AS consumo_kWh
@@ -275,7 +275,7 @@ async function consumoPorHora(idSala, filtros = {}) {
            se.id_dispositivo
       WHERE d.id_sala = ?
       ${condicoes.join('\n      ')}
-      GROUP BY HOUR(l.timestamp)
+      GROUP BY HOUR(CONVERT_TZ(l.timestamp, '+00:00', '-03:00'))
       ORDER BY hora
     `, {
       replacements

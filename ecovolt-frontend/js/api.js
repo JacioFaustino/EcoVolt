@@ -82,5 +82,5 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const valido = x => x !== null && x !== undefined && x !== '' && !isNaN(x);
 const num = (x, d = 1) => valido(x) ? Number(x).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
 const un = (x, u, d = 1) => valido(x) ? `${num(x, d)} ${u}` : '—';
-const dataHora = x => x ? new Date(x).toLocaleString('pt-BR') : '—';
+const dataHora = x => x ? new Date(x).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—';
 const dia = x => x ? String(x).slice(0, 10).split('-').reverse().join('/') : '—';
