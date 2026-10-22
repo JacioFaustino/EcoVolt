@@ -47,18 +47,15 @@ async function listar() {
            d.id_dispositivo
        AND se.tipo = 'CORRENTE'
       LEFT JOIN leitura l
-        ON l.id_sensor = se.id_sensor
-      LEFT JOIN leitura l2
-        ON l2.id_sensor = l.id_sensor
-       AND (
-         l2.timestamp > l.timestamp
-         OR (
-           l2.timestamp = l.timestamp
-           AND l2.id_leitura >
-               l.id_leitura
-         )
-       )
-      WHERE l2.id_leitura IS NULL
+        ON l.id_leitura = (
+          SELECT l2.id_leitura
+          FROM leitura l2
+          WHERE l2.id_sensor = se.id_sensor
+          ORDER BY
+            l2.timestamp DESC,
+            l2.id_leitura DESC
+          LIMIT 1
+        )
       ORDER BY s.id_sala
     `);
 
