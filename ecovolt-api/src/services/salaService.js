@@ -23,8 +23,20 @@ async function listar() {
         s.horario_inicio,
         s.horario_fim,
         d.status_operacao,
-        l.potencia_ativa_W,
-        l.timestamp,
+        (
+          SELECT l.potencia_ativa_W
+          FROM leitura l
+          WHERE l.id_sensor = se.id_sensor
+          ORDER BY l.timestamp DESC, l.id_leitura DESC
+          LIMIT 1
+        ) AS potencia_ativa_W,
+        (
+          SELECT l.timestamp
+          FROM leitura l
+          WHERE l.id_sensor = se.id_sensor
+          ORDER BY l.timestamp DESC, l.id_leitura DESC
+          LIMIT 1
+        ) AS timestamp,
         (
           SELECT ep.estado
           FROM estado_porta ep
@@ -46,16 +58,6 @@ async function listar() {
         ON se.id_dispositivo =
            d.id_dispositivo
        AND se.tipo = 'CORRENTE'
-      LEFT JOIN leitura l
-        ON l.id_leitura = (
-          SELECT l2.id_leitura
-          FROM leitura l2
-          WHERE l2.id_sensor = se.id_sensor
-          ORDER BY
-            l2.timestamp DESC,
-            l2.id_leitura DESC
-          LIMIT 1
-        )
       ORDER BY s.id_sala
     `);
 
