@@ -505,7 +505,15 @@ function iniciar() {
       }
 
       $('#sust-res').innerHTML = '<p class="vazio">Carregando…</p>';
-      const r = await apiFetch(`/api/sustentabilidade?${p}`);
+
+      let r;
+
+      try {
+        r = await apiFetch(`/api/sustentabilidade?${p}`);
+      } catch (err) {
+        $('#sust-res').innerHTML = `<p class="erro">${esc(err.message)}</p>`;
+        return;
+      }
 
       if (!r.periodo.fim_considerado) {
         $('#sust-res').innerHTML = '<p class="banner">Esse período ainda não começou. Não há dados para calcular.</p>';
